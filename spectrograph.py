@@ -1,28 +1,73 @@
 import numpy as np
+import pylab
+from scipy.interpolate import RegularGridInterpolator
 
 class Spectrograph(object):
-  """Class to describe a given spectrograph, and return noise estimates"""
+  """Class to describe a given spectrograph, and return noise estimates.
+    Should be pythonized, right now is really inefficient."""
+
   def __init__(self):
     """Construct object, probably from files"""
     if not self._setup():
       print "couldn't setup spectrograph"
       exit()
 
+  def _read_file(self,mag):
+    """Read one of the files with SNR as a function of zq and lambda"""
+    fname='LyaDESISNR/sn-spec-lya-r'+str(mag)+'-t4000.dat'
+    data = pylab.loadtxt(fname)
+    l_A = data[:,0]
+    SN = data[:,1:]
+    return l_A,SN
+
   def _setup(self):
     """Setup objects from file(s)"""
-    # exposure time (seconds), or whatever is stored in files
-    self.texp_sec = 4000.0
+    # number of exposures in file with SNR
+    self.file_Nexp = 4
+    self.mags = np.arange(19.25,25.0,0.50)
+    self.zq = np.arange(2.0,4.9,0.25)
+    self.lobs_A = None
+    self.SN = None
+    Nm=len(self.mags)
+    for i in range(Nm): 
+      m = self.mags[i]
+      l_A,SN = self._read_file(m)
+      if i == 0:
+        self.lobs_A = l_A
+        Nm=len(self.mags)
+        Nz=len(self.zq)
+        Nl=len(self.lobs_A)
+        self.SN = np.empty((Nm,Nz,Nl))
+      self.SN[i,:,:] = SN.transpose()
+    
+    self.SN = RegularGridInterpolator((self.mags,self.zq,self.lobs_A), self.SN)
     return True
 
-  def PixelNoiseRMS(self,rmag,zq,lobs_A,pix_A):
-    """Noise RMS as a function of observed magnitude, quasar redshift, 
-      pixel wavelength (in A), and pixel width (in A)"""
+  def range_zq(self):
+    return self.zq[0],self.zq[-1]
 
-    # DESI file probably returns noise per Angstrom and unit time
-    sigma_N_A_t = 1.0
-    # we need to multiply this by sqrt(pix_A)
-    sigma_N_t = sigma_N_A_t * np.sqrt(pix_A)
-    # and also multiply by exposure time, or number...
-    sigma_N = sigma_N_t * np.sqrt(self.texp_sec)
-    return sigma_N
+  def range_mag(self):
+    return self.mags[0],self.mags[-1]
+
+  def range_lobs_A(self):
+    return self.lobs_A[0],self.lobs_A[-1]
+
+  def PixelNoiseRMS(self,rmag,zq,lobs_A,pix_A,Nexp=4):
+    """Noise RMS as a function of observed magnitude, quasar redshift, 
+      pixel wavelength (in A), and pixel width (in A).
+      If S/N = 0, or not covered, return very large number."""
+    large_noise=1e10  
+    if rmag > self.mags[-1] or rmag < self.mags[0]: return large_noise
+    if zq > self.zq[-1] or zq < self.zq[0]: return large_noise
+    if lobs_A > self.lobs_A[-1] or lobs_A < self.lobs_A[0]: return large_noise
+
+    # DESI file returns S/N per Angstrom, per file_Nexp exposures
+    SN = self.SN([rmag,zq,lobs_A])
+    # scale with pixel width
+    SN *= np.sqrt(pix_A)
+    # scale with number of exposures
+    SN *= np.sqrt(1.0*Nexp/self.file_Nexp)
+    # prevent division by zero
+    SN = np.fmax(SN,1.0/large_noise)
+    return 1.0/SN
 
