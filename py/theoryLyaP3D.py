@@ -1,5 +1,4 @@
 import numpy as np
-import scipy.interpolate
 import analytic_bias_McD2003 as bM03
 import analytic_p1d_PD2013 as p1D
 import cosmoCAMB as cCAMB

@@ -13,6 +13,7 @@ setup(name="lya_forecast",
                   'analytic_p1d_PD2013',
                   'cosmoCAMB',
                   'theoryLyaP3D',
+                  'forecast',
                   'qso_LF',
                   'spectrograph'],
       package_dir={'': 'py'})
