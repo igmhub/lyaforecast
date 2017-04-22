@@ -25,11 +25,11 @@ class Cosmology(object):
             # compute only background expansion
             self.results = camb.get_results(self.pars)
 
-    def LinPk_hMpc(self,kmin,kmax,npoints):
+    def LinPk_hMpc(self,kmin=1.e-4,kmax=1.e1,npoints=1000):
         """Return linear power interpolator in units of h/Mpc, at zref"""
         if self.pk_zref:
             kh,_,pk = self.results.get_matter_power_spectrum(minkh=kmin,
-                                                        maxkh=kmax,npoints=npoints)
+                                                    maxkh=kmax,npoints=npoints)
             return scipy.interpolate.interp1d(kh,pk[0,:])
         else:
             print('if you want LinPk_hMpc, initialize Cosmology with pk_zref')
