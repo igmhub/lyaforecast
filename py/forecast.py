@@ -15,12 +15,19 @@ class FisherForecast(object):
         self.cosmo = cCAMB.Cosmology(self.zref)
         # Lya P3D theory
         self.LyaP3D = P3D.TheoryLyaP3D(self.cosmo)
-        # survey (will make object)
-        self.area_deg2 = 14000
         # quasar luminosity function
         self.QLF = qLF.QuasarLF()
         # spectrograph
         self.spec = sp.Spectrograph(band='g')
+        # survey (will make object)
+        self.area_deg2 = 14000
+        # redshift range
+        self.z_min = 2.1
+        self.z_max = 3.0
+        # magnitude range 
+        self.mag_min = 19.0
+        self.mag_max = 23.0
+        # pixel width and resolution (in Angstroms)
+        self.pix_A = 1.0
+        self.res_A = 1.0
 
-    def compute(self):
-        print('compute Fisher forecast and print results')

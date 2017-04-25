@@ -24,6 +24,9 @@ class Cosmology(object):
         else:
             # compute only background expansion
             self.results = camb.get_results(self.pars)
+        # not sure where to put this
+        self.c_kms = 2.998e5
+        self.lya_A = 1215.67
 
     def LinPk_hMpc(self,kmin=1.e-4,kmax=1.e1,npoints=1000):
         """Return linear power interpolator in units of h/Mpc, at zref"""
@@ -37,5 +40,19 @@ class Cosmology(object):
 
     def dkms_dhMpc(self,z):
         """Convertion factor from Mpc/h to km/s, at redshift z."""
-        return self.results.hubble_parameter(z)/self.pars.H0/(1+z)*100
+        return self.results.hubble_parameter(z)/self.pars.H0/(1+z)*100.0
+
+    def dkms_dlobs(self,z):
+        """Convertion factor from lambda_obs to km/s, at redshift z."""
+        return self.c_kms / self.lya_A / (1+z) 
+
+    def dhMpc_dlobs(self,z):
+        """Convertion factor from lambda_obs to Mpc/h, at redshift z."""
+        return self.dkms_dlobs(z) / self.dkms_dhMpc(z)
+
+    def dhMpc_ddeg(self,z):
+        """Convertion factor from degrees to Mpc/h, at redshift z."""
+        dMpc_drad=self.results.angular_diameter_distance(z)*(1+z)
+        #print('dMpc_drad',dMpc_drad)
+        return dMpc_drad*np.pi/180.0*self.pars.H0/100.0
 
