@@ -6,7 +6,9 @@ import spectrograph as sp
 import analytic_p1d_PD2013 as p1D
 
 class FisherForecast(object):
-    """Compute error-bars for Lyman alpha P(z,k,mu) for a given survey."""
+    """Compute error-bars for Lyman alpha P(z,k,mu) for a given survey.
+        Different redshif bins are treated as independent, and right
+        now this object only deals with one redshift bin at a time."""
 
     def __init__(self):
         # Lya P3D defined at this redshift
@@ -19,7 +21,7 @@ class FisherForecast(object):
         self.QLF = qLF.QuasarLF()
         # spectrograph
         self.spec = sp.Spectrograph(band='g')
-        # survey (will make object)
+        # survey (should probably be its own object at some point...)
         self.area_deg2 = 14000.0
         # each mini-survey will cover only (lmin,lmax)
         self.lmin = 3501.0
@@ -37,12 +39,13 @@ class FisherForecast(object):
         self.lrmin = 985.0
         self.lrmax = 1200.0
         # S/N weights evaluated at this Fourier mode
-        self.kt_w_deg=10.0
-        self.kp_w_kms=0.001
+        self.kt_w_deg=7.0 # ~ 0.1 h/Mpc
+        self.kp_w_kms=0.001 # ~ 0.1 h/Mpc
         # verbosity level
         self.verbose = 1
 
     def mean_z(self):
+        """ given wavelength range covered in bin, compute central redshift"""
         l = np.sqrt(self.lmin*self.lmax)
         z = l/self.cosmo.lya_A-1.0
         return z
@@ -106,7 +109,11 @@ class FisherForecast(object):
         return P_degkms
 
     def TotalFluxP3D_degkms(self,kt_deg,kp_kms,linear=False):
-        """Sum of 3D Lya power, aliasing and effective noise power"""
+        """Sum of 3D Lya power, aliasing and effective noise power. 
+            This is extremely innefficient, since we are re-computing
+            np_eff, Pw2D and PN_eff every time we call this. 
+            We should either cache the values, or allow calls to this function
+            with multiple Fourier modes at a time."""
         # figure out mean redshift of the mini-survey
         z = self.mean_z()
         # signal
@@ -158,18 +165,23 @@ class FisherForecast(object):
         # survey volume in units of (Mpc/h)^3
         V_degkms = self.area_deg2 * self.L_kms()
         V_hMpc = V_degkms * dhMpc_ddeg * dhMpc_ddeg / dkms_dhMpc
-        # number of modes ( 0 < mu < 1 )
+        # based on Eq 8 in Seo & Eisenstein (2003), but note that here we
+        # use 0 < mu < 1 and they used -1 < mu < 1
         Nmodes = V_hMpc * k_hMpc*k_hMpc*dk_hMpc*dmu / (2*np.pi*np.pi)
         varP = 2 * np.power(totP_hMpc,2) / Nmodes
         return varP
 
     def I1_degkms(self,zq,mags,weights):
-        """Integral 1 in McDonald & Eisenstein (2007)"""
+        """Integral 1 in McDonald & Eisenstein (2007).
+            It represents an effective density of quasars, and it depends
+            on the current value of the weights, that in turn depend on I1.
+            We solve these iteratively (converges very fast)."""
         # quasar number density
         dkms_dz = self.cosmo.c_kms / (1+zq)
         dndm_degdz = self.QLF.dNdzdmddeg2(zq,mags)
         dndm_degkms = dndm_degdz / dkms_dz
         dm = mags[1]-mags[0]
+        # weighted density of quasars
         I1 = np.sum(dndm_degkms*weights)*dm
         if self.verbose > 2:
             print('dkms_dz',dkms_dz)
@@ -181,7 +193,8 @@ class FisherForecast(object):
         return I1
 
     def I2_degkms(self,zq,mags,weights):
-        """Integral 2 in McDonald & Eisenstein (2007)"""
+        """Integral 2 in McDonald & Eisenstein (2007).
+            It is used to set the level of aliasing."""
         # quasar number density
         dndm_degdz = self.QLF.dNdzdmddeg2(zq,mags)
         dkms_dz = self.cosmo.c_kms / (1+zq)
@@ -191,7 +204,8 @@ class FisherForecast(object):
         return I2
 
     def I3_degkms(self,zq,lc,mags,weights):
-        """Integral 3 in McDonald & Eisenstein (2007)"""
+        """Integral 3 in McDonald & Eisenstein (2007).
+            It is used to set the effective noise power."""
         # pixel noise variance (dimensionless)
         varN = self.VarN_m(zq,lc,mags)
         # quasar number density
@@ -203,6 +217,9 @@ class FisherForecast(object):
         return I3
 
     def np_eff_degkms(self,zq,mags,weights):
+        """Effective density of pixels, n_p^eff in McDonald & Eisenstein (2007).
+            It is used in constructing the weights as a function of mag."""
+        # get effective density of quasars
         I1 = self.I1_degkms(zq,mags,weights)
         # number of pixels in a forest
         Npix = self.Lq_kms() / self.pix_kms
@@ -226,7 +243,10 @@ class FisherForecast(object):
         return noise_var
 
     def PN_m_degkms(self,zq,lc,mags,weights):
-        """Effective noise power as a function of magnitude"""
+        """Effective noise power as a function of magnitude,
+            referred to as P_N(m) in McDonald & Eisenstein (2007).
+            Note this is a 3D power, not 1D, and it is used in 
+            constructing the weights as a function of magnitude."""
         # pixel noise variance (dimensionless)
         varN = self.VarN_m(zq,lc,mags)
         # 3D effective density of pixels
@@ -239,7 +259,9 @@ class FisherForecast(object):
         return PN
 
     def Weights1(self,P3D_degkms,P1D_kms,zq,lc,mags,weights):
-        """Compute new weights as a function of magnitude, using P3D"""
+        """Compute new weights as a function of magnitude, using P3D.
+            This version of computing the weights is closer to the one
+            described in McDonald & Eisenstein (2007)."""
         # 3D noise power as a function of magnitude
         PN = self.PN_m_degkms(zq,lc,mags,weights)
         # effective 3D density of quasars
@@ -261,7 +283,10 @@ class FisherForecast(object):
         return weights
 
     def Weights2(self,P3D_degkms,P1D_kms,zq,lc,mags,weights):
-        """Compute new weights as a function of magnitude, using pixel var"""
+        """Compute new weights as a function of magnitude, using pixel var.
+            This version of computing the weights is closer to the c++ code
+            developed by Pat McDonald and used in official forecasts of DESI.
+            It gives identical results than Weights1 above."""
         # noise pixel variance as a function of magnitude (dimensionless)
         varN = self.VarN_m(zq,lc,mags)
         # pixel variance from P1D (dimensionless)
@@ -284,8 +309,10 @@ class FisherForecast(object):
             print('weights',weights)
         return weights
 
-    def ComputeWeights(self,Niter,P3D_degkms,P1D_kms,zq,lc,mags):
-        """Compute weights as a function of magnitude, iteratively"""
+    def ComputeWeights(self,P3D_degkms,P1D_kms,zq,lc,mags,Niter=3):
+        """Compute weights as a function of magnitude. 
+            We do it iteratively since the weights depend on I1, and 
+            I1 depends on the weights."""
         # start with weights = 1.0
         weights = np.ones_like(mags)
         for i in range(Niter):
@@ -298,7 +325,8 @@ class FisherForecast(object):
         return weights
 
     def EffectiveDensityAndNoise(self,P3D_w_degkms,P1D_w_kms):
-        """Compute effective density of lines of sight and eff. noise power."""
+        """Compute effective density of lines of sight and eff. noise power.
+            Terms Pw2D and PN_eff in McDonald & Eisenstein (2007)."""
         # mean wavelenght of bin
         lc = np.sqrt(self.lmin*self.lmax)
         # redshift of quasar for which forest is centered in z
@@ -307,14 +335,22 @@ class FisherForecast(object):
         if self.verbose>0:
             print('lc, lrc, zq =',lc,lrc,zq)
 
-        # this is a first version, it should integrate over (zq,mag,lambda)
+        # The code below is closer to the method described in the publication,
+        # but the c++ code by Pat is more complicated. 
+        # The code below evaluates all the quantities at the central redshift
+        # of the bin, and uses a single quasar redshift assuming that all pixels
+        # in the bin have restframe wavelength of the center of the forest.
+        # Pat's code, instead, computes an average over both redshift of 
+        # absorption and over quasar redshift.
+
+        # set range of magnitudes used (same as in c++ code)
         mmin=self.mag_min
         mmax=self.mag_max
         dm=0.5
         N=int((mmax-mmin)/dm)
         mags = np.linspace(mmin,mmax,N)
-        Niter=5
-        weights = self.ComputeWeights(Niter,P3D_w_degkms,P1D_w_kms,zq,lc,mags)
+        # get weights (iteratively)
+        weights = self.ComputeWeights(P3D_w_degkms,P1D_w_kms,zq,lc,mags)
 
         # given weights, compute integrals in McDonald & Eisenstein (2007)
         I1 = self.I1_degkms(zq,mags,weights)
