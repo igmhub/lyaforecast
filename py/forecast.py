@@ -20,27 +20,61 @@ class FisherForecast(object):
         # spectrograph
         self.spec = sp.Spectrograph(band='g')
         # survey (will make object)
-        self.area_deg2 = 14000
-        # redshift range
-        self.z_min = 2.0
-        self.z_max = 2.2
+        self.area_deg2 = 14000.0
+        # each mini-survey will cover only (lmin,lmax)
+        self.lmin = 3501.0
+        self.lmax = 3701.0
+        # quasar redshift range
+        self.zq_min = 2.0
+        self.zq_max = 4.0
         # magnitude range 
         self.mag_min = 19.0
         self.mag_max = 23.0
-        # pixel width and resolution (in Angstroms)
-        self.pix_A = 1.0
-        self.res_A = 1.0
+        # pixel width and resolution in km/s (for now)
+        self.pix_kms = 50.0
+        self.res_kms = 70.0
+        # definition of forest (lrmin,lrmax)
+        self.lrmin = 985.0
+        self.lrmax = 1200.0
+        # S/N weights evaluated at this Fourier mode
+        self.kt_w_deg=10.0
+        self.kp_w_kms=0.001
         # verbosity level
-        self.verbose = 0
+        self.verbose = 1
 
+    def mean_z(self):
+        l = np.sqrt(self.lmin*self.lmax)
+        z = l/self.cosmo.lya_A-1.0
+        return z
 
-    def Nmodes(self,kt_deg,kp_kms,dkt_deg,dkp_kms):
-        """Compute number of Fourier modes given Volume and bin width."""
-        return 1.0
+    def L_kms(self):
+        """Depth of redshift bin, in km/s"""
+        c_kms = self.cosmo.c_kms
+        L_kms = c_kms*np.log(self.lmax/self.lmin)
+        return L_kms
 
-    def FluxP3D_degkms(self,z,kt_deg,kp_kms,linear=False):
+    def Lq_kms(self):
+        """Length of Lya forest, in km/s"""
+        c_kms = self.cosmo.c_kms
+        Lq_kms = c_kms*np.log(self.lrmax/self.lrmin)
+        return Lq_kms
+
+    def FluxP1D_kms(self,kp_kms):
+        """1D Lya power spectrum in observed coordinates,
+            smoothed with pixel widht and resolution."""
+        z = self.mean_z()
+        # get P1D before smoothing
+        P1D_kms = p1D.P1D_z_kms_PD2013(z,kp_kms)
+        # smoothing (pixelization and resolution)
+        Kernel=self.spec.SmoothKernel_kms(z,self.pix_kms,self.res_kms,kp_kms)
+        P1D_kms *= (Kernel*Kernel)
+        return P1D_kms
+
+    def FluxP3D_degkms(self,kt_deg,kp_kms,linear=False):
         """3D Lya power spectrum in observed coordinates. 
+            Power smoothed with pixel width and resolution.
             If linear=True, it will ignore small scale correction."""
+        z = self.mean_z()
         # transform Mpc/h to km/s
         dkms_dhMpc = self.cosmo.dkms_dhMpc(z)
         kp_hMpc = kp_kms * dkms_dhMpc
@@ -54,6 +88,9 @@ class FisherForecast(object):
         P_hMpc = self.LyaP3D.FluxP3D_hMpc(z,k_hMpc,mu,linear)
         # convert power to observed units
         P_degkms = P_hMpc * dkms_dhMpc / dhMpc_ddeg / dhMpc_ddeg
+        # smoothing (pixelization and resolution)
+        Kernel=self.spec.SmoothKernel_kms(z,self.pix_kms,self.res_kms,kp_kms)
+        P_degkms *= (Kernel*Kernel)
         if self.verbose > 1:
             print('z = ',z)
             print('kp_kms = ',kp_kms)
@@ -68,23 +105,235 @@ class FisherForecast(object):
             print('P_degkms =',P_degkms)
         return P_degkms
 
-    def VarFluxP3D_degkms(self,z,kt_deg,kp_kms,linear=False):
-        """3D Lya power variance per mode"""
+    def TotalFluxP3D_degkms(self,kt_deg,kp_kms,linear=False):
+        """Sum of 3D Lya power, aliasing and effective noise power"""
+        # figure out mean redshift of the mini-survey
+        z = self.mean_z()
         # signal
-        P3D_degkms = self.FluxP3D_degkms(z,kt_deg,kp_kms,linear)
+        P3D = self.FluxP3D_degkms(kt_deg,kp_kms,linear)
         # P1D for aliasing
-        P1D_kms = p1D.P1D_z_kms_PD2013(z,kp_kms)
-        # meanwhile...
-        n_eff_deg2 = 10.0
-        P_total_degkms = P3D_degkms + P1D_kms / n_eff_deg2
-        var_P_degkms = 2*P_total_degkms*P_total_degkms
-        if self.verbose > 1:
-            print('z',z)
-            print('kt_deg',kt_deg)
-            print('kp_kms',kp_kms)
-            print('P3D_degkms',P3D_degkms)
-            print('P1D_kms',P1D_kms)
-            print('P_total_degkms',P_total_degkms)
-            print('var_P_degkms',var_P_degkms)
-        return var_P_degkms
+        P1D = self.FluxP1D_kms(kp_kms)
+        # evaluate P1D and P3D for weighting
+        P3D_w = self.FluxP3D_degkms(self.kt_w_deg,self.kp_w_kms)
+        P1D_w = self.FluxP1D_kms(self.kp_w_kms)
+        # get Pw2D and PNeff in McDonald & Eisenstein (2007)
+        np_eff,Pw2D,PN_eff = self.EffectiveDensityAndNoise(P3D_w,P1D_w)
+        PT = P3D + Pw2D*P1D + PN_eff
+        return PT
+
+    def FluxP3D_hMpc(self,k_hMpc,mu,linear=False):
+        """3D Lya power, in units of (Mpc/h)^3, including pixel width and
+            resolution smoothing."""
+        z = self.mean_z()
+        # decompose into line of sight and transverse components
+        kp_hMpc = k_hMpc * mu
+        kt_hMpc = k_hMpc * np.sqrt(1.0-mu*mu)
+        # transform from comoving to observed coordinates
+        dkms_dhMpc = self.cosmo.dkms_dhMpc(z)
+        kp_kms = kp_hMpc / dkms_dhMpc
+        dhMpc_ddeg = self.cosmo.dhMpc_ddeg(z)
+        kt_deg = kt_hMpc * dhMpc_ddeg
+        # get 3D power in units of observed coordinates
+        P_degkms = self.FluxP3D_degkms(kt_deg,kp_kms,linear)
+        # convert into units of (Mpc/h)^3
+        P_hMpc = P_degkms * dhMpc_ddeg * dhMpc_ddeg / dkms_dhMpc
+        return P_hMpc
+
+    def VarFluxP3D_hMpc(self,k_hMpc,mu,dk_hMpc,dmu,linear=False):
+        """Variance of 3D Lya power, in units of (Mpc/h)^3.
+            Note that here 0 < mu < 1."""
+        z = self.mean_z()
+        # decompose into line of sight and transverse components
+        kp_hMpc = k_hMpc * mu
+        kt_hMpc = k_hMpc * np.sqrt(1.0-mu*mu)
+        # transform from comoving to observed coordinates
+        dkms_dhMpc = self.cosmo.dkms_dhMpc(z)
+        kp_kms = kp_hMpc / dkms_dhMpc
+        dhMpc_ddeg = self.cosmo.dhMpc_ddeg(z)
+        kt_deg = kt_hMpc * dhMpc_ddeg
+        # get total power in units of observed coordinates
+        totP_degkms = self.TotalFluxP3D_degkms(kt_deg,kp_kms,linear)
+        # convert into units of (Mpc/h)^3
+        totP_hMpc = totP_degkms * dhMpc_ddeg * dhMpc_ddeg / dkms_dhMpc
+        # survey volume in units of (Mpc/h)^3
+        V_degkms = self.area_deg2 * self.L_kms()
+        V_hMpc = V_degkms * dhMpc_ddeg * dhMpc_ddeg / dkms_dhMpc
+        # number of modes ( 0 < mu < 1 )
+        Nmodes = V_hMpc * k_hMpc*k_hMpc*dk_hMpc*dmu / (2*np.pi*np.pi)
+        varP = 2 * np.power(totP_hMpc,2) / Nmodes
+        return varP
+
+    def I1_degkms(self,zq,mags,weights):
+        """Integral 1 in McDonald & Eisenstein (2007)"""
+        # quasar number density
+        dkms_dz = self.cosmo.c_kms / (1+zq)
+        dndm_degdz = self.QLF.dNdzdmddeg2(zq,mags)
+        dndm_degkms = dndm_degdz / dkms_dz
+        dm = mags[1]-mags[0]
+        I1 = np.sum(dndm_degkms*weights)*dm
+        if self.verbose > 2:
+            print('dkms_dz',dkms_dz)
+            print('dndm_degdz',dndm_degdz)
+            print('dndm_degkms',dndm_degkms)
+            print('mags',mags)
+            print('integrant',dndm_degkms*weights)
+            print('I1',I1)
+        return I1
+
+    def I2_degkms(self,zq,mags,weights):
+        """Integral 2 in McDonald & Eisenstein (2007)"""
+        # quasar number density
+        dndm_degdz = self.QLF.dNdzdmddeg2(zq,mags)
+        dkms_dz = self.cosmo.c_kms / (1+zq)
+        dndm_degkms = dndm_degdz / dkms_dz
+        dm = mags[1]-mags[0]
+        I2 = np.sum(dndm_degkms*weights*weights)*dm
+        return I2
+
+    def I3_degkms(self,zq,lc,mags,weights):
+        """Integral 3 in McDonald & Eisenstein (2007)"""
+        # pixel noise variance (dimensionless)
+        varN = self.VarN_m(zq,lc,mags)
+        # quasar number density
+        dndm_degdz = self.QLF.dNdzdmddeg2(zq,mags)
+        dkms_dz = self.cosmo.c_kms / (1+zq)
+        dndm_degkms = dndm_degdz / dkms_dz
+        dm = mags[1]-mags[0]
+        I3 = np.sum(dndm_degkms*weights*weights*varN)*dm
+        return I3
+
+    def np_eff_degkms(self,zq,mags,weights):
+        I1 = self.I1_degkms(zq,mags,weights)
+        # number of pixels in a forest
+        Npix = self.Lq_kms() / self.pix_kms
+        np_eff = I1 * Npix
+        if self.verbose > 2:
+            print('I1',I1)
+            print('Npix',Npix)
+            print('np_eff',np_eff)
+        return np_eff
+
+    def VarN_m(self,zq,lc,mags):
+        """Noise pixel variance as a function of magnitude (dimensionless)"""
+        z = lc / self.cosmo.lya_A - 1.0
+        # pixel in Angstroms
+        pix_A = self.pix_kms / self.cosmo.dkms_dlobs(z)
+        # noise rms per pixel
+        noise_rms = np.empty_like(mags)
+        for i,m in enumerate(mags):
+            noise_rms[i] = self.spec.PixelNoiseRMS(m,zq,lc,pix_A)
+        noise_var = noise_rms*noise_rms
+        return noise_var
+
+    def PN_m_degkms(self,zq,lc,mags,weights):
+        """Effective noise power as a function of magnitude"""
+        # pixel noise variance (dimensionless)
+        varN = self.VarN_m(zq,lc,mags)
+        # 3D effective density of pixels
+        neff = self.np_eff_degkms(zq,mags,weights)
+        PN = varN / neff
+        if self.verbose > 2:
+            print('noise variance',varN)
+            print('neff',neff)
+            print('PN',PN)
+        return PN
+
+    def Weights1(self,P3D_degkms,P1D_kms,zq,lc,mags,weights):
+        """Compute new weights as a function of magnitude, using P3D"""
+        # 3D noise power as a function of magnitude
+        PN = self.PN_m_degkms(zq,lc,mags,weights)
+        # effective 3D density of quasars
+        I1 = self.I1_degkms(zq,mags,weights)
+        # 2D density of lines of sight (units of 1/deg^2)
+        n2D_los = I1 * self.Lq_kms()
+        # weights include aliasing as signal
+        PS = P3D_degkms + P1D_kms / n2D_los
+        weights = PS/(PS+PN)
+        if self.verbose > 2:
+            print('P3D',P3D_degkms)
+            print('P1D',P1D_kms)
+            print('PN',PN)
+            print('I1',I1)
+            print('n2D_los',n2D_los)
+            print('PA',Pw2D*P1D_kms)
+            print('PS',PS)
+            print('weights',weights)
+        return weights
+
+    def Weights2(self,P3D_degkms,P1D_kms,zq,lc,mags,weights):
+        """Compute new weights as a function of magnitude, using pixel var"""
+        # noise pixel variance as a function of magnitude (dimensionless)
+        varN = self.VarN_m(zq,lc,mags)
+        # pixel variance from P1D (dimensionless)
+        var1D = P1D_kms / self.pix_kms
+        # effective 3D density of pixels
+        neff = self.np_eff_degkms(zq,mags,weights)
+        # pixel variance from P3D (dimensionless)
+        var3D = P3D_degkms * neff
+        # signal variance (include P1D and P3D)
+        varS = var3D + var1D
+        weights = varS/(varS+varN)
+        if self.verbose > 2:
+            print('P3D',P3D_degkms)
+            print('P1D',P1D_kms)
+            print('varN',varN)
+            print('var1D',var1D)
+            print('neff',neff)
+            print('var3D',var3D)
+            print('varS',varS)
+            print('weights',weights)
+        return weights
+
+    def ComputeWeights(self,Niter,P3D_degkms,P1D_kms,zq,lc,mags):
+        """Compute weights as a function of magnitude, iteratively"""
+        # start with weights = 1.0
+        weights = np.ones_like(mags)
+        for i in range(Niter):
+            if self.verbose > 1:
+                print(i,'<w>',np.mean(weights))
+            weights = self.Weights1(P3D_degkms,P1D_kms,zq,lc,mags,weights)
+            #weights = self.Weights2(P3D_degkms,P1D_kms,zq,lc,mags,weights)
+            if self.verbose > 2:
+                print('weights',weights)
+        return weights
+
+    def EffectiveDensityAndNoise(self,P3D_w_degkms,P1D_w_kms):
+        """Compute effective density of lines of sight and eff. noise power."""
+        # mean wavelenght of bin
+        lc = np.sqrt(self.lmin*self.lmax)
+        # redshift of quasar for which forest is centered in z
+        lrc = np.sqrt(self.lrmin*self.lrmax)
+        zq = lc/lrc-1.0
+        if self.verbose>0:
+            print('lc, lrc, zq =',lc,lrc,zq)
+
+        # this is a first version, it should integrate over (zq,mag,lambda)
+        mmin=self.mag_min
+        mmax=self.mag_max
+        dm=0.5
+        N=int((mmax-mmin)/dm)
+        mags = np.linspace(mmin,mmax,N)
+        Niter=5
+        weights = self.ComputeWeights(Niter,P3D_w_degkms,P1D_w_kms,zq,lc,mags)
+
+        # given weights, compute integrals in McDonald & Eisenstein (2007)
+        I1 = self.I1_degkms(zq,mags,weights)
+        I2 = self.I2_degkms(zq,mags,weights)
+        I3 = self.I3_degkms(zq,lc,mags,weights)
+        if self.verbose > 0:
+            print('I1, I2, I3 =',I1,I2,I3)
+
+        # length of forest in km/s
+        Lq = self.Lq_kms()
+        # length of pixel in km/s
+        lp = self.pix_kms
+        # effective 3D density of pixels
+        np_eff = I1*Lq/lp
+        # Pw2D in McDonald & Eisenstein (2007)
+        Pw2D = I2/I1/I1/Lq
+        # PNeff in McDonald & Eisenstein (2007)
+        PN_eff = I3*lp/I1/I1/Lq
+        if self.verbose > 0:
+            print('np_eff, Pw2D, PN_eff =',np_eff,Pw2D,PN_eff)
+        return np_eff,Pw2D,PN_eff
 

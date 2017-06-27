@@ -85,3 +85,11 @@ class Spectrograph(object):
         SN = np.fmax(SN,1.0/large_noise)
         return 1.0/SN
 
+    def SmoothKernel_kms(self,z,pix_kms,res_kms,k_kms):
+        """Convolution kernel for the field (square this for power),
+            including both pixelization and resolution"""
+        # pixelization
+        x = np.fmax(0.5*k_kms*pix_kms,1.e-10)
+        kernelPixel = np.sin(x)/x
+        kernelGauss = np.exp(-0.5*k_kms*k_kms*res_kms*res_kms)
+        return kernelPixel * kernelGauss
