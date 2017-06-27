@@ -28,12 +28,17 @@ class Spectrograph(object):
         return l_A,SN
 
     def _setup(self):
-        """Setup objects from file(s)"""
+        """Setup objects from file(s). Files were generated using
+            desihub/desimodel/bin/desi_quicklya.py"""
         # number of exposures in file with SNR
         self.file_Nexp = 4
+        # quasar magnitudes in file
         self.mags = np.arange(19.25,25.0,0.50)
+        # quasar redshifts in file
         self.zq = np.arange(2.0,4.9,0.25)
+        # pixel wavelengths in file
         self.lobs_A = None
+        # signal to noise per pixel in file
         self.SN = None
         Nm=len(self.mags)
         for i in range(Nm): 
@@ -47,16 +52,20 @@ class Spectrograph(object):
                 self.SN = np.empty((Nm,Nz,Nl))
             self.SN[i,:,:] = SN.transpose()
     
+        # setup interpolator
         self.SN=RegularGridInterpolator((self.mags,self.zq,self.lobs_A),self.SN)
         return True
 
     def range_zq(self):
+        """Return range of quasar redshifts from file"""
         return self.zq[0],self.zq[-1]
   
     def range_mag(self):
+        """Return range of magnitudes from file"""
         return self.mags[0],self.mags[-1]
   
     def range_lobs_A(self):
+        """Return range of wavelengths from file"""
         return self.lobs_A[0],self.lobs_A[-1]
   
     def PixelNoiseRMS(self,rmag,zq,lobs_A,pix_A,Nexp=4):
