@@ -13,8 +13,15 @@ class Cosmology(object):
 
             If pk_zref is set, it will compute linear power at z=pk_zref."""
         self.pars = camb.CAMBparams()
-        self.pars.set_cosmology(H0=67.5,ombh2=0.022,omch2=0.122)
-        self.pars.InitPower.set_params(As=2e-9,ns=0.965, r=0)
+        #self.pars.set_cosmology(H0=67.5,ombh2=0.022,omch2=0.122)
+        #self.pars.InitPower.set_params(As=2e-9,ns=0.965, r=0)
+        # use same parameters as in c++ code
+        ob = 0.02214
+        om = 0.1414
+        oc = om-ob
+        h = 0.719
+        self.pars.set_cosmology(H0=100.0*h,ombh2=ob,omch2=oc)
+        self.pars.InitPower.set_params(As=2.2e-9,ns=0.961, r=0)
         self.pk_zref=pk_zref
         if self.pk_zref:
             self.pars.set_matter_power(redshifts=[self.pk_zref], kmax=10.0)

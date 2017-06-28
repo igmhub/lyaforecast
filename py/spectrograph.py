@@ -82,6 +82,7 @@ class Spectrograph(object):
             return large_noise
 
         # if brighter than minimum magnitude, use minimum
+        # (c++ code does extrapolation, not clear what is better)
         trmag = np.fmax(rmag, self.mags[0])
  
         # DESI file returns S/N per Angstrom, per file_Nexp exposures

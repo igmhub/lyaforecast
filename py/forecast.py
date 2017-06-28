@@ -30,7 +30,7 @@ class FisherForecast(object):
         self.zq_min = 2.0
         self.zq_max = 4.0
         # magnitude range 
-        self.mag_min = 19.0
+        self.mag_min = 16.5
         self.mag_max = 23.0
         # pixel width and resolution in km/s (for now)
         self.pix_kms = 50.0
@@ -108,23 +108,20 @@ class FisherForecast(object):
             print('P_degkms =',P_degkms)
         return P_degkms
 
-    def TotalFluxP3D_degkms(self,kt_deg,kp_kms,linear=False):
+    def TotalFluxP3D_degkms(self,kt_deg,kp_kms,linear=False,
+                            Pw2D=None,PN_eff=None):
         """Sum of 3D Lya power, aliasing and effective noise power. 
-            This is extremely innefficient, since we are re-computing
-            np_eff, Pw2D and PN_eff every time we call this. 
-            We should either cache the values, or allow calls to this function
-            with multiple Fourier modes at a time."""
+            If Pw2D or PN_eff are not passed, it will compute them"""
         # figure out mean redshift of the mini-survey
         z = self.mean_z()
         # signal
         P3D = self.FluxP3D_degkms(kt_deg,kp_kms,linear)
         # P1D for aliasing
         P1D = self.FluxP1D_kms(kp_kms)
-        # evaluate P1D and P3D for weighting
-        P3D_w = self.FluxP3D_degkms(self.kt_w_deg,self.kp_w_kms)
-        P1D_w = self.FluxP1D_kms(self.kp_w_kms)
-        # get Pw2D and PNeff in McDonald & Eisenstein (2007)
-        np_eff,Pw2D,PN_eff = self.EffectiveDensityAndNoise(P3D_w,P1D_w)
+        # check if we have everything
+        if not Pw2D or not PN_eff:
+            # get Pw2D and PNeff in McDonald & Eisenstein (2007)
+            np_eff,Pw2D,PN_eff = self.EffectiveDensityAndNoise()
         PT = P3D + Pw2D*P1D + PN_eff
         return PT
 
@@ -146,9 +143,11 @@ class FisherForecast(object):
         P_hMpc = P_degkms * dhMpc_ddeg * dhMpc_ddeg / dkms_dhMpc
         return P_hMpc
 
-    def VarFluxP3D_hMpc(self,k_hMpc,mu,dk_hMpc,dmu,linear=False):
+    def VarFluxP3D_hMpc(self,k_hMpc,mu,dk_hMpc,dmu,linear=False,
+                        Pw2D=None,PN_eff=None):
         """Variance of 3D Lya power, in units of (Mpc/h)^3.
-            Note that here 0 < mu < 1."""
+            Note that here 0 < mu < 1.
+            If Pw2D or PN_eff are not passed, it will compute them"""
         z = self.mean_z()
         # decompose into line of sight and transverse components
         kp_hMpc = k_hMpc * mu
@@ -159,7 +158,7 @@ class FisherForecast(object):
         dhMpc_ddeg = self.cosmo.dhMpc_ddeg(z)
         kt_deg = kt_hMpc * dhMpc_ddeg
         # get total power in units of observed coordinates
-        totP_degkms = self.TotalFluxP3D_degkms(kt_deg,kp_kms,linear)
+        totP_degkms = self.TotalFluxP3D_degkms(kt_deg,kp_kms,linear,Pw2D,PN_eff)
         # convert into units of (Mpc/h)^3
         totP_hMpc = totP_degkms * dhMpc_ddeg * dhMpc_ddeg / dkms_dhMpc
         # survey volume in units of (Mpc/h)^3
@@ -277,7 +276,7 @@ class FisherForecast(object):
             print('PN',PN)
             print('I1',I1)
             print('n2D_los',n2D_los)
-            print('PA',Pw2D*P1D_kms)
+            print('PA',n2D_los*P1D_kms)
             print('PS',PS)
             print('weights',weights)
         return weights
@@ -309,12 +308,28 @@ class FisherForecast(object):
             print('weights',weights)
         return weights
 
+    def InitialWeights(self,P1D_kms,zq,lc,mags):
+        """Compute initial weights as a function of magnitude, using only
+            P1D and noise variance."""
+        # noise pixel variance as a function of magnitude (dimensionless)
+        varN = self.VarN_m(zq,lc,mags)
+        # pixel variance from P1D (dimensionless)
+        var1D = P1D_kms / self.pix_kms
+        weights = var1D/(var1D+varN)
+        if self.verbose > 2:
+            print('P1D',P1D_kms)
+            print('varN',varN)
+            print('noise_rms',np.sqrt(varN))
+            print('var1D',var1D)
+            print('weights',weights)
+        return weights
+
     def ComputeWeights(self,P3D_degkms,P1D_kms,zq,lc,mags,Niter=3):
         """Compute weights as a function of magnitude. 
             We do it iteratively since the weights depend on I1, and 
             I1 depends on the weights."""
-        # start with weights = 1.0
-        weights = np.ones_like(mags)
+        # compute first weights using only 1D and noise variance
+        weights = self.InitialWeights(P1D_kms,zq,lc,mags)
         for i in range(Niter):
             if self.verbose > 1:
                 print(i,'<w>',np.mean(weights))
@@ -324,7 +339,7 @@ class FisherForecast(object):
                 print('weights',weights)
         return weights
 
-    def EffectiveDensityAndNoise(self,P3D_w_degkms,P1D_w_kms):
+    def EffectiveDensityAndNoise(self):
         """Compute effective density of lines of sight and eff. noise power.
             Terms Pw2D and PN_eff in McDonald & Eisenstein (2007)."""
         # mean wavelenght of bin
@@ -334,6 +349,9 @@ class FisherForecast(object):
         zq = lc/lrc-1.0
         if self.verbose>0:
             print('lc, lrc, zq =',lc,lrc,zq)
+        # evaluate P1D and P3D for weighting
+        P3D_w = self.FluxP3D_degkms(self.kt_w_deg,self.kp_w_kms)
+        P1D_w = self.FluxP1D_kms(self.kp_w_kms)
 
         # The code below is closer to the method described in the publication,
         # but the c++ code by Pat is more complicated. 
@@ -346,11 +364,12 @@ class FisherForecast(object):
         # set range of magnitudes used (same as in c++ code)
         mmin=self.mag_min
         mmax=self.mag_max
-        dm=0.5
+        # same binning as in c++ code
+        dm=0.025
         N=int((mmax-mmin)/dm)
         mags = np.linspace(mmin,mmax,N)
         # get weights (iteratively)
-        weights = self.ComputeWeights(P3D_w_degkms,P1D_w_kms,zq,lc,mags)
+        weights = self.ComputeWeights(P3D_w,P1D_w,zq,lc,mags)
 
         # given weights, compute integrals in McDonald & Eisenstein (2007)
         I1 = self.I1_degkms(zq,mags,weights)
