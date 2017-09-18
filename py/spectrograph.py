@@ -6,10 +6,30 @@ class Spectrograph(object):
     """Class to describe a given spectrograph, and return noise estimates.
         Should be pythonized, right now is really inefficient."""
 
-    def __init__(self, band='g'):
-        """Construct object, probably from files"""
+    def __init__(self, band='g', file_Nexp=4, mag=(19.25, 25.0,0.5), zqso=(2.0,4.9,0.25)) :
+        """Construct object, probably from files. Parameters are passed to self._setup()
+            
+            Parameters
+            ----------
+            band : string, optional
+            Name of the spectroscopic band
+            * Default: 'g'
+            
+            file_Nexp, int, optional
+            Number of exposures per file
+            * Default: 4
+            
+            mag : tuple
+            Quasar magnitues in file (min, max, step)
+            * Default: (19.25, 25.0,0.5)
+            
+            zqso : tuple
+            Quasar redshifts in file (min, max, step)
+            * Default: (2.0,4.9,0.25)
+            """
+        
         self.band=band
-        if not self._setup():
+        if not self._setup(file_Nexp=file_Nexp, mag=mag, zqso=zqso):
             print("couldn't setup spectrograph")
             raise SystemExit
 
@@ -27,15 +47,15 @@ class Spectrograph(object):
         SN = data[:,1:]
         return l_A,SN
 
-    def _setup(self):
+    def _setup(self, file_Nexp=None, mag=None, zqso=None):
         """Setup objects from file(s). Files were generated using
             desihub/desimodel/bin/desi_quicklya.py"""
         # number of exposures in file with SNR
-        self.file_Nexp = 4
+        self.file_Nexp = file_Nexp
         # quasar magnitudes in file
-        self.mags = np.arange(19.25,25.0,0.50)
+        self.mags = np.arange(*mag)
         # quasar redshifts in file
-        self.zq = np.arange(2.0,4.9,0.25)
+        self.zq = np.arange(*zqso)
         # pixel wavelengths in file
         self.lobs_A = None
         # signal to noise per pixel in file
