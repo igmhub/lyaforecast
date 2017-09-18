@@ -5,14 +5,17 @@ import scipy.interpolate
 class QuasarLF(object):
     """Class to describe a quasar luminosity function"""
 
-    def __init__(self):
-        """Construct object, probably with files describing QL"""
-        self._setup_YecheFile()
+    def __init__(self, fname='../data/dNdzdg_QSO.dat'):
+        """Construct object, probably with files describing QL
+            Optionally specify a filename containing dNdzdg info. If not 
+            specified use ../data/dNdzdg_QSO.dat
+            """
+        self._setup_YecheFile(fname)
 
-    def _setup_YecheFile(self):
+    def _setup_YecheFile(self, fname):
         """Setup objects from file"""
         # use file from Christophe / Nathalie
-        fname = '../data/dNdzdg_QSO.dat'
+        fname = fname
         # read table       
         z,m,tdNdmdzddeg2 = pylab.loadtxt(fname,unpack=True)
         z = np.unique(z)
