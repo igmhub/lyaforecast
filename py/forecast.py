@@ -8,13 +8,41 @@ import analytic_p1d_PD2013 as p1D
 class FisherForecast(object):
     """Compute error-bars for Lyman alpha P(z,k,mu) for a given survey.
         Different redshif bins are treated as independent, and right
-        now this object only deals with one redshift bin at a time."""
+        now this object only deals with one redshift bin at a time.
+        """
 
-    def __init__(self):
+    def __init__(self, zref=2.25, cosmo=None):
+        """
+            Initialize class instance
+            
+            Parameters
+            ----------
+            zref : float
+            Redshift at which the Lya P3D is defined at
+            * Default: 2.25
+            
+            cosmo : cCAMB.Cosmology
+            Cosmological model at the redshift of reference
+            * Default: cCAMB.Cosmology(pk_zref=zref)
+            
+            RETURNS:
+            An instance of Spectrum
+            
+            RAISES:
+            * SpectrumFormatError when the given format is not found in FORMATS
+            * SpectrumTypeError when the arguments are of incorrect type
+            
+            EXAMPLES:
+            * spec = Spectrum('test_image.fits')
+            
+            """
         # Lya P3D defined at this redshift
         self.zref=2.25
         # Cosmological model
-        self.cosmo = cCAMB.Cosmology(self.zref)
+        if cosmo == None:
+            self.cosmo = cCAMB.Cosmology(pk_zref=self.zref)
+        else:
+            self.cosmo = cosmo
         # Lya P3D theory
         self.LyaP3D = P3D.TheoryLyaP3D(self.cosmo)
         # quasar luminosity function
