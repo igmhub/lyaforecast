@@ -16,7 +16,7 @@ class TheoryLyaP3D(object):
             self.zref=cosmo.pk_zref
         else:
             self.zref=2.25
-            self.cosmo=cCAMB.Cosmology(self.zref)
+            self.cosmo=cCAMB.Cosmology(pk_zref=self.zref)
 
         # get linear power spectrum 
         self.kmin=1.e-4
