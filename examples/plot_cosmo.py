@@ -4,7 +4,7 @@ import cosmoCAMB as cCAMB
 
 # setup cosmological model
 zref=2.25
-cosmo = cCAMB.Cosmology(zref)
+cosmo = cCAMB.Cosmology(pk_zref=zref)
 # compute linear power at zref
 kmin=1.e-4
 kmax=1.e1

@@ -5,7 +5,9 @@ import qso_LF as qLF
 import spectrograph as sp
 import analytic_p1d_PD2013 as p1D
 import survey
-from constants import LIGHT_SPEED, LYA_WL
+
+LIGHT_SPEED = 2.998e5 # speed of light, in [km/s]
+LYA_WL = 1215.67 # Lyman alpha wavelength, in [Angstroms]
 
 class FisherForecast(object):
     """Compute error-bars for Lyman alpha P(z,k,mu) for a given survey.
@@ -132,7 +134,7 @@ class FisherForecast(object):
         # get P1D before smoothing
         P1D_kms = p1D.P1D_z_kms_PD2013(z,kp_kms)
         # smoothing (pixelization and resolution)
-        Kernel=self.spec.SmoothKernel_kms(z,self.survey.pix_width,self.survey.res_kms,kp_kms)
+        Kernel=self.spec.SmoothKernel_kms(z,self.survey.pixel_width,self.survey.res_kms,kp_kms)
         P1D_kms *= (Kernel*Kernel)
         return P1D_kms
 
@@ -155,7 +157,7 @@ class FisherForecast(object):
         # convert power to observed units
         P_degkms = P_hMpc * dkms_dhMpc / dhMpc_ddeg / dhMpc_ddeg
         # smoothing (pixelization and resolution)
-        Kernel=self.spec.SmoothKernel_kms(z,self.survey.pix_width,self.survey.res_kms,kp_kms)
+        Kernel=self.spec.SmoothKernel_kms(z,self.survey.pixel_width,self.survey.res_kms,kp_kms)
         P_degkms *= (Kernel*Kernel)
         if self.verbose > 1:
             print('z = ',z)
@@ -284,7 +286,7 @@ class FisherForecast(object):
         # get effective density of quasars
         I1 = self.I1_degkms(zq,mags,weights)
         # number of pixels in a forest
-        Npix = self.Lq_kms() / self.survey.pix_width
+        Npix = self.Lq_kms() / self.survey.pixel_width
         np_eff = I1 * Npix
         if self.verbose > 2:
             print('I1',I1)
@@ -296,7 +298,7 @@ class FisherForecast(object):
         """Noise pixel variance as a function of magnitude (dimensionless)"""
         z = lc / LYA_WL - 1.0
         # pixel in Angstroms
-        pix_A = self.survey.pix_width / self.cosmo.dkms_dlobs(z)
+        pix_A = self.survey.pixel_width / self.cosmo.dkms_dlobs(z)
         # noise rms per pixel
         noise_rms = np.empty_like(mags)
         for i,m in enumerate(mags):
@@ -352,7 +354,7 @@ class FisherForecast(object):
         # noise pixel variance as a function of magnitude (dimensionless)
         varN = self.VarN_m(zq,lc,mags)
         # pixel variance from P1D (dimensionless)
-        var1D = P1D_kms / self.survey.pix_width
+        var1D = P1D_kms / self.survey.pixel_width
         # effective 3D density of pixels
         neff = self.np_eff_degkms(zq,mags,weights)
         # pixel variance from P3D (dimensionless)
@@ -377,7 +379,7 @@ class FisherForecast(object):
         # noise pixel variance as a function of magnitude (dimensionless)
         varN = self.VarN_m(zq,lc,mags)
         # pixel variance from P1D (dimensionless)
-        var1D = P1D_kms / self.survey.pix_width
+        var1D = P1D_kms / self.survey.pixel_width
         weights = var1D/(var1D+varN)
         if self.verbose > 2:
             print('P1D',P1D_kms)
@@ -406,7 +408,7 @@ class FisherForecast(object):
         """Compute effective density of lines of sight and eff. noise power.
             Terms Pw2D and PN_eff in McDonald & Eisenstein (2007)."""
         # mean wavelenght of bin
-        lc = self.survey.mean_wavelength()
+        lc = self.survey.mean_wavelenght()
         # redshift of quasar for which forest is centered in z
         lrc = self.survey.mean_forest_wavelength()
         zq = lc/lrc-1.0
@@ -444,7 +446,7 @@ class FisherForecast(object):
         # length of forest in km/s
         Lq = self.Lq_kms()
         # length of pixel in km/s
-        lp = self.survey.pix_width
+        lp = self.survey.pixel_width
         # effective 3D density of pixels
         np_eff = I1*Lq/lp
         # Pw2D in McDonald & Eisenstein (2007)
