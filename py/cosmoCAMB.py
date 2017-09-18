@@ -76,7 +76,7 @@ class Cosmology(object):
             # compute only background expansion
             self.results = camb.get_results(self.pars)
     
-        # not sure where to put this
+        # not sure where to put this (deprecated, moved to constants.py as constants)
         self.c_kms = 2.998e5
         self.lya_A = 1215.67
 
