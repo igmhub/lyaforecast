@@ -10,7 +10,7 @@ class FisherForecast(object):
         Different redshif bins are treated as independent, and right
         now this object only deals with one redshift bin at a time."""
 
-    def __init__(self):
+    def __init__(self,snr_filenames,dndzdmag_filename):
         # Lya P3D defined at this redshift
         self.zref=2.25
         # Cosmological model
@@ -18,9 +18,9 @@ class FisherForecast(object):
         # Lya P3D theory
         self.LyaP3D = P3D.TheoryLyaP3D(self.cosmo)
         # quasar luminosity function
-        self.QLF = qLF.QuasarLF()
+        self.QLF = qLF.QuasarLF(filename=dndzdmag_filename)
         # spectrograph
-        self.spec = sp.Spectrograph(band='g')
+        self.spec = sp.Spectrograph(filenames=snr_filenames)
         # survey (should probably be its own object at some point...)
         self.area_deg2 = 14000.0
         # each mini-survey will cover only (lmin,lmax)

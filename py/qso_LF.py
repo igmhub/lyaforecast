@@ -5,19 +5,18 @@ import scipy.interpolate
 class QuasarLF(object):
     """Class to describe a quasar luminosity function"""
 
-    def __init__(self):
+    def __init__(self,filename):
         """Construct object, probably with files describing QL"""
-        self._setup_YecheFile()
-
-    def _setup_YecheFile(self):
+        self._setup_YecheFile(filename)
+        
+    def _setup_YecheFile(self,filename):
         """Setup objects from file"""
-        # use file from Christophe / Nathalie
-        fname = '../data/dNdzdg_QSO.dat'
+        print("reading",filename,"in QuasarLF:_setup_YecheFile")
         # read table       
-        z,m,tdNdmdzddeg2 = pylab.loadtxt(fname,unpack=True)
+        z,m,tdNdmdzddeg2 = pylab.loadtxt(filename,unpack=True)
         z = np.unique(z)
         m = np.unique(m)
-        # assume dz=0.2, dm=0.5
+        print("WARNING!!! assume dz=0.2, dm=0.5")
         dz=0.2
         dm=0.5
         tdNdmdzddeg2 /= (dz*dm)
