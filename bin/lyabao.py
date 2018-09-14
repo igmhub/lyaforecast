@@ -47,14 +47,12 @@ for iz in range(zz.size) :
     dk     = (k[1]-k[0]) # h/Mpc
     dlk    = dk/k
     lk     = np.log(k)
-    print("np.sum(dk)=",np.sum(dk))
-
-
+    
     # There is no need to add a marginalization on additive polynomial coefficients
-    # because I subtract a high degree polynomial on P(k)
-    # to keep only the wiggles
-    #poldeg=-1 # pol degree of terms to marginalize in power spectrum fit (-1 to disable)
-    #fisher_matrix = np.zeros((2+(1+poldeg),2+(1+poldeg)))
+    # because I subtract a high degree polynomial on P(k) to keep only the BAO wiggles
+    # (such that the derivatives of the model wrt the alphas are by construction orthogonal to
+    # the polynomial coefficients so no marginalization is needed)
+    
     fisher_matrix = np.zeros((2,2))
     
     
@@ -65,8 +63,9 @@ for iz in range(zz.size) :
 
         p3d    = np.array([forecast.FluxP3D_hMpc(kk,mu) for kk in k]) # (Mpc/h)**3
         varp3d = np.array([forecast.VarFluxP3D_hMpc(kk,mu,dk,dmu=dmu,Pw2D=Pw2D,PN_eff=PN_eff) for kk in k]) # (Mpc/h)**6
-        
-        # not sure how to to much better than this
+
+        # compute a smooth version of p3d
+        # not sure how to do much better than a polynomial fit
         x=np.log(k)
         y=np.log(p3d)
         x -= np.mean(x)
@@ -80,17 +79,18 @@ for iz in range(zz.size) :
         # I am looking only at the wiggles
         model      = p3d-smooth_p3d
         
-        # Gaussian damping
+        # gaussian damping
         kp = mu*k
         kt = np.sqrt(1-mu*mu)*k
         SigNLp = 3.26 # Mpc/h
         SigNLt = 3.26 # Mpc/h
         model     *= np.exp(-(SigNLp*kp)**2/2-(SigNLt*kt)**2/2)
-        
+
+        # derivative of model wrt to log(k)
         dmodel     = np.zeros(k.size)
         dmodel[1:] = model[1:]-model[:-1]
         dmodeldlk  = dmodel/dlk
-
+        
         # k = sqrt( kp**2 + kt**2)
         #   = sqrt( ap**2*k**2*mu2 + at**2*k**2*(1-mu2))
         #   = k*sqrt( ap**2*mu2 + at**2*(1-mu2))
