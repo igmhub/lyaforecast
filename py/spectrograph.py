@@ -90,7 +90,8 @@ class Spectrograph(object):
 
         # quasar magnitudes in file
         self.mags = np.array(mags)
-   
+
+        print("In S/N files:")
         print("pass-band for magnitudes =",self.band)
         print("Nexp in file             =",self.file_Nexp)
         print("Redshifts                =",self.zq)
