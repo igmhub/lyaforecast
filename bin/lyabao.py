@@ -10,10 +10,11 @@ parser=argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpForm
 parser.add_argument('--snr-files', type=str, nargs= "*", required=True, help="list of input snr filenames, like sn-spec-lya-20180907-r22-t4000-nexp4.dat")
 parser.add_argument('--dndzdmag-file', type=str, required=True, help="qso density filename, like nzr_qso.dat")
 parser.add_argument('--z-bin-centers', type=str, required=False, default="1.96,2.12,2.28,2.43,2.59,2.75,2.91,3.07,3.23,3.39,3.55", help="comma separated list of redshifts")
+parser.add_argument('--total-density', type=float, default=None, required=False, help="normalize the qso dndwdmag to this total density (/deg2)")
 
 args = parser.parse_args()
 
-forecast = fc.FisherForecast(snr_filenames=args.snr_files,dndzdmag_filename=args.dndzdmag_file)
+forecast = fc.FisherForecast(snr_filenames=args.snr_files,dndzdmag_filename=args.dndzdmag_file,total_density=args.total_density)
 
 
 zz = np.array(args.z_bin_centers.split(",")).astype(float)
@@ -86,6 +87,19 @@ for iz in range(zz.size) :
         SigNLt = 3.26 # Mpc/h
         model     *= np.exp(-(SigNLp*kp)**2/2-(SigNLt*kt)**2/2)
 
+        if False and zz[iz]>2.1 :
+            import matplotlib.pyplot as plt
+            print("z=",zz[iz],"mu=",mu)
+            rebin=2
+            scale=1./np.sqrt(rebin)
+            plt.fill_between(k,model/p3d-1-np.sqrt(varp3d)/p3d*scale,model/p3d-1+np.sqrt(varp3d)/p3d*scale,alpha=0.4)
+            plt.plot(k,model/p3d-1,c="k")
+            kb=k[:(k.size//rebin)*rebin].reshape(k.size//rebin,rebin).mean(-1)
+            plt.plot(kb,np.interp(kb,k,model/p3d-1),"o",c="k")
+            plt.xlim([0.,0.4])
+            plt.show()
+            
+        
         # derivative of model wrt to log(k)
         dmodel     = np.zeros(k.size)
         dmodel[1:] = model[1:]-model[:-1]
