@@ -133,7 +133,7 @@ class Spectrograph(object):
         """Return range of wavelengths from file"""
         return self.lobs_A[0],self.lobs_A[-1]
   
-    def PixelNoiseRMS(self,rmag,zq,lobs_A,pix_A,Nexp=4):
+    def PixelNoiseRMS(self,rmag,zq,lobs_A,pix_A):
         """Normalized noise RMS as a function of observed magnitude, quasar
           redshift, pixel wavelength (in A), and pixel width (in A).
           Normalized means that this is the noise for delta_flux, not flux, and
@@ -154,8 +154,12 @@ class Spectrograph(object):
         SN = self.SN([trmag,zq,lobs_A])
         # scale with pixel width
         SN *= np.sqrt(pix_A)
+
+        # do not scale with number of exposures here
+        # we do it in the computation of the S/N files
         # scale with number of exposures
-        SN *= np.sqrt(1.0*Nexp/self.file_Nexp)
+        # SN *= np.sqrt(1.0*Nexp/self.file_Nexp)
+        
         # prevent division by zero
         SN = np.fmax(SN,1.0/large_noise)
         return 1.0/SN
