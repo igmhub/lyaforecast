@@ -1,9 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import argparse
 import qso_LF as qLF 
 
+parser=argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,description="""Plot QLF""")
+parser.add_argument('--dndzdmag-file', type=str, required=True, help="qso density filename, like data/dNdzdg_QSO.dat")
+args = parser.parse_args()
+
 # get QLF object
-LF = qLF.QuasarLF()
+LF = qLF.QuasarLF(args.dndzdmag_file)
 
 # get limits
 mmin,mmax = LF.range_mag()
