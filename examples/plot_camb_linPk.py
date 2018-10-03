@@ -19,8 +19,9 @@ s8 = np.array(results.get_sigma8())
 
 for i, z in enumerate(zs):
     plt.loglog(kh, pk[i,:],label='z = '+str(int(z)))
-    plt.xlabel('k/h Mpc')
-    plt.legend(loc='lower left')
-    plt.title('Matter power at different redshifts')
+plt.xlabel('k [h/Mpc]')
+plt.ylabel('P(k) [Mpc/h]')
+plt.legend(loc='lower left')
+plt.title('Matter power at different redshifts')
 plt.show()
 
