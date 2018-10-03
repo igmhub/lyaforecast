@@ -6,6 +6,9 @@ import decimal
 def z_str(z):
     return "{:.3g}".format(decimal.Decimal(z))
 
+def mu_str(mu):
+    return "{:.2g}".format(decimal.Decimal(mu))
+
 forecast = fc.FisherForecast()
 
 # define binning for plots
@@ -40,10 +43,10 @@ while lmin < 5000:
     lmin = lmax 
     lmax += 200
 plt.legend(loc='best')
-plt.title('mu ='+str(mu)+', dk ='+str(dk_hMpc)+', dmu = '+str(dmu))
+plt.title('mu ='+mu_str(mu)+', dk ='+str(dk_hMpc)+', dmu = '+str(dmu))
 plt.xlabel('k [h/Mpc]')
 plt.ylabel('S/N')
-plt.savefig('LyaP3D_mu'+str(mu)+'.pdf')
+plt.savefig('LyaP3D_mu'+mu_str(mu)+'.pdf')
 
 # make plot for a fixed z, as a function of mu
 mus=np.linspace(0.1,0.9,5)
@@ -60,7 +63,7 @@ for mu in mus:
     #VarP3D = forecast.VarFluxP3D_hMpc_kmu(k_hMpc,mu,dk_hMpc,dmu)
     #print('P3D =',P3D)
     #print('VarP3D =',VarP3D)    
-    plt.plot(ks_hMpc,P3D/np.sqrt(VarP3D),label='mu ='+str(mu))
+    plt.plot(ks_hMpc,P3D/np.sqrt(VarP3D),label='mu ='+mu_str(mu))
 plt.legend(loc='best')
 plt.title('z ='+z_str(z)+', dk ='+str(dk_hMpc)+', dmu = '+str(dmu))
 plt.xlabel('k [h/Mpc]')
