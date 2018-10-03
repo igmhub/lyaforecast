@@ -19,17 +19,6 @@ plot_quasar(spec,z=2.5,mag=22.5,lobs=l)
 plot_quasar(spec,z=3.0,mag=22.0,lobs=l)
 plot_quasar(spec,z=3.0,mag=22.5,lobs=l)
 
-plt.rc('text', usetex=True)
-plt.rcParams['text.latex.preamble'] = [
-  r'\usepackage{siunitx}',   # i need upright \micro symbols, but you need
-  r'\sisetup{detect-all}',   # this to force siunitx to actually use your fonts
-  r'\usepackage{helvet}',    # set the normal font here
-  r'\usepackage{sansmath}',  # load up the sansmath so that math -> helvet
-  r'\sansmath'               # <- tricky! -- gotta actually tell tex to use!
-]
-plt.rc('xtick', labelsize=15)
-plt.rc('ytick', labelsize=15)
-
 plt.legend(fontsize=15)
 plt.ylim(0,2.0)
 plt.xlim(3600,6000)
