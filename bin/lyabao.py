@@ -5,10 +5,9 @@ import numpy as np
 import forecast as fc
 import argparse
 
-parser=argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                   description="""Fisher forecast""")
-parser.add_argument('--snr-files', type=str, nargs= "*", required=True, help="list of input snr filenames, like sn-spec-lya-20180907-r22-t4000-nexp4.dat")
-parser.add_argument('--dndzdmag-file', type=str, required=True, help="qso density filename, like nzr_qso.dat")
+parser=argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,description="""Fisher forecast""")
+parser.add_argument('--snr-files', type=str, nargs= "*", required=True, help="list of input snr filenames, like data/sn-spec-lya-20180907-r22-t4000-nexp4.dat")
+parser.add_argument('--dndzdmag-file', type=str, required=True, help="qso density filename, like data/nzr_qso.dat")
 parser.add_argument('--z-bin-centers', type=str, required=False, default="1.96,2.12,2.28,2.43,2.59,2.75,2.91,3.07,3.23,3.39,3.55", help="comma separated list of redshifts")
 parser.add_argument('--total-density', type=float, default=None, required=False, help="normalize the qso dndwdmag to this total density (/deg2)")
 parser.add_argument('--area', type=float, default=14000., required=False, help="survey area (deg2)")
