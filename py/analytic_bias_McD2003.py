@@ -32,7 +32,23 @@ def D_hMpc_McD2003(k_hMpc,mu):
     texp = D_NL_hMpc(k_hMpc) - D_p_hMpc(k_hMpc) - D_v_hMpc(k_hMpc,mu)
     return np.exp(texp)
 
-def bias_hMpc_McD2003(k_hMpc,mu,linear=False):
+def density_bias(z):
+    """Linear density bias as a function of redshift"""
+    #alpha=1.25
+    alpha=2.9
+    bias_zref=-np.sqrt(0.0173)
+    zref=2.25
+    return bias_zref*((1+z)/(1+zref))**alpha
+
+def beta_RSD(z):
+    """Linear RSD anisotropy parameter as a function of redshift"""
+    #alpha=0.75
+    alpha=0.0
+    beta_zref=1.58
+    zref=2.25
+    return beta_zref*((1+z)/(1+zref))**alpha
+
+def biasing_hMpc_McD2003(z,k_hMpc,mu,linear=False):
     """Analytic formula for scale-dependent bias of Lyman alpha P3D(z,k,mu) 
         from McDonald (2003), including Kaiser and small scale correction.  
         Basically, it return P_F(k,mu) / P_lin(k,mu)
@@ -41,8 +57,8 @@ def bias_hMpc_McD2003(k_hMpc,mu,linear=False):
         If linear=True, return only Kaiser.
         Wavenumbers in h/Mpc. """
     # first row, table 1 in McDonald (2003)
-    b_delta=-np.sqrt(0.0173)
-    beta=1.58
+    b_delta = density_bias(z)
+    beta = beta_RSD(z)
     Kaiser=pow(b_delta*(1+beta*pow(mu,2)),2)
     if linear:
         return Kaiser

@@ -17,25 +17,32 @@ class TheoryLyaP3D(object):
         else:
             self.zref=2.25
             self.cosmo=cCAMB.Cosmology(self.zref)
-
         # get linear power spectrum 
         self.kmin=1.e-4
         self.kmax=1.e1
         self.linPk = self.cosmo.LinPk_hMpc(self.kmin,self.kmax,1000)
 
+    def LinearPk_hMpc(self,z,k_hMpc):
+        """Linear density power, assuming EdS scale with redshift"""
+        if z<1.8:
+            raise SystemExit('Can not use EdS to go too low in z, '+str(z))
+        zref=self.zref
+        if zref<1.8:
+            raise SystemExit('Can not have too low zref, '+str(zref))
+        Pk_zref = self.linPk(k_hMpc)
+        EdS = ((1+zref)/(1+z))**2
+        return Pk_zref * EdS
+
     def FluxP3D_hMpc(self,z,k_hMpc,mu,linear=False):
         """3D power spectrum P_F(z,k,mu). 
-
             If linear=True, it will ignore small scale correction."""
         # get linear power at zref
         k = np.fmax(k_hMpc,self.kmin)
         k = np.fmin(k,self.kmax)
-        P = self.linPk(k)
+        P = self.LinearPk_hMpc(z,k)
         # get flux scale-dependent biasing (or only linear term)
-        b = bM03.bias_hMpc_McD2003(k,mu,linear)
-        # get (approximated) redshift evolution
-        zevol = pow( (1+z)/(1+self.zref), 3.8)
-        return P * b * zevol
+        biasing = bM03.biasing_hMpc_McD2003(z,k,mu,linear)
+        return P * biasing
 
     def FluxP1D_hMpc(self,z,k_hMpc,res_hMpc=None,pix_hMpc=None):
         """Analytical P1D, in units of h/Mpc instead of km/s."""
