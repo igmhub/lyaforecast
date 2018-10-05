@@ -83,8 +83,12 @@ for iz in range(zz.size) :
         # gaussian damping
         kp = mu*k
         kt = np.sqrt(1-mu*mu)*k
-        SigNLp = 3.26 # Mpc/h
+        
+        # Eisenstein, Seo, White, 2007, Eq. 12
         SigNLt = 3.26 # Mpc/h
+        f = 0.96 # logarithmic growth rate for omegam=0.3 z~2.3
+        SigNLp = (1+f)*SigNLt # Mpc/h
+        
         model     *= np.exp(-(SigNLp*kp)**2/2-(SigNLt*kt)**2/2)
 
         if False and zz[iz]>2.1 :
