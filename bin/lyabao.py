@@ -10,6 +10,7 @@ parser.add_argument('--snr-files', type=str, nargs= "*", required=True, help="li
 parser.add_argument('--dndzdmag-file', type=str, required=True, help="qso density filename, like data/nzr_qso.dat")
 parser.add_argument('--z-bin-centers', type=str, required=False, default="1.96,2.12,2.28,2.43,2.59,2.75,2.91,3.07,3.23,3.39,3.55", help="comma separated list of redshifts")
 parser.add_argument('--total-density', type=float, default=None, required=False, help="normalize the qso dndwdmag to this total density (/deg2)")
+parser.add_argument('--area', type=float, default=14000., required=False, help="survey area (deg2)")
 parser.add_argument('--use-v2-weights', action = "store_true" ,
         help="use an alternative way to compute weights in Lya forecast")
 args = parser.parse_args()
@@ -17,6 +18,7 @@ args = parser.parse_args()
 forecast = fc.FisherForecast(snr_filenames=args.snr_files,
         dndzdmag_filename=args.dndzdmag_file,total_density=args.total_density,
         use_v2_weights=args.use_v2_weights)
+forecast.area_deg2 = args.area
 
 zz = np.array(args.z_bin_centers.split(",")).astype(float)
 dz = np.zeros(zz.size)
@@ -84,8 +86,12 @@ for iz in range(zz.size) :
         # gaussian damping
         kp = mu*k
         kt = np.sqrt(1-mu*mu)*k
-        SigNLp = 3.26 # Mpc/h
+        
+        # Eisenstein, Seo, White, 2007, Eq. 12
         SigNLt = 3.26 # Mpc/h
+        f = 0.96 # logarithmic growth rate for omegam=0.3 z~2.3
+        SigNLp = (1+f)*SigNLt # Mpc/h
+        
         model     *= np.exp(-(SigNLp*kp)**2/2-(SigNLt*kt)**2/2)
 
         if False and zz[iz]>2.1 :
