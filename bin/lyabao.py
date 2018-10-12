@@ -13,12 +13,17 @@ parser.add_argument('--total-density', type=float, default=None, required=False,
 parser.add_argument('--area', type=float, default=14000., required=False, help="survey area (deg2)")
 parser.add_argument('--use-v2-weights', action = "store_true" ,
         help="use an alternative way to compute weights in Lya forecast")
+parser.add_argument('--lrmin', type=float, default=985., required=False, help="min restframe wavelength")
+parser.add_argument('--lrmax', type=float, default=1200., required=False, help="min restframe wavelength")
+
 args = parser.parse_args()
 
 forecast = fc.FisherForecast(snr_filenames=args.snr_files,
         dndzdmag_filename=args.dndzdmag_file,total_density=args.total_density,
         use_v2_weights=args.use_v2_weights)
 forecast.area_deg2 = args.area
+forecast.lrmin     = args.lrmin
+forecast.lrmax     = args.lrmax
 
 zz = np.array(args.z_bin_centers.split(",")).astype(float)
 dz = np.zeros(zz.size)
