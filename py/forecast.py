@@ -342,7 +342,6 @@ class FisherForecast(object):
         for i in range(Niter):
             if self.verbose > 1:
                 print(i,'<w>',np.mean(weights))
-            print('test',self.use_v2_weights)
             if self.use_v2_weights:
                 weights = self.Weights2(P3D_degkms,P1D_kms,zq,lc,mags,weights)
             else:

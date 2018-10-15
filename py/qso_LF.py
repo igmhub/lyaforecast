@@ -17,7 +17,8 @@ class QuasarLF(object):
         z = np.unique(tz)
         m = np.unique(tm)
         if total_density is not None :
-            z_min_lya = 1.9
+            # the requirement is 50 quasars per square degree above 2.15
+            z_min_lya = 2.15
             current_total_density = np.sum(tdNdmdzddeg2[tz>z_min_lya])
             print("Scaling dndzdmag from a total density (z>={}) of {} to {}/deg2".format(z_min_lya,current_total_density,total_density))
             tdNdmdzddeg2 *= (total_density/current_total_density)
