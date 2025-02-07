@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lyaforecast"
+version = "0.1.0"
+description = "A package to forecast cosmological constraints from Lyman-alpha surveys."
+authors = [
+    { name = "Andreu Font-Ribera", email = "afont@ifae.es"},
+    { name = "Julien Guy", email = "jguy@lbl.gov"},
+    { name = "Calum Gordon", email = "cgordon@ifae.es"}
+]
+
+[project.urls]
+repository = "https://github.com/igmhub/lyaforecast.git"
+
+[tool.setuptools.dynamic]
+version = {attr = "lyaforecast.__version__"}
+readme = {file = ["README.md"]}
+dependencies = {file = "requirements.txt"}
+
+
+[project.scripts]
+run-bao-forecast = "lyaforecast.scripts.run_bao_forecast:main"
