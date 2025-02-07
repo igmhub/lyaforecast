@@ -8,9 +8,11 @@ import analytic_p1d_PD2013 as p1D
 class FisherForecast(object):
     """Compute error-bars for Lyman alpha P(z,k,mu) for a given survey.
         Different redshif bins are treated as independent, and right
-        now this object only deals with one redshift bin at a time."""
+        now this object only deals with one redshift bin at a time.
+        Pass flag use_v2_weights to try an alternative method."""
 
-    def __init__(self):
+    def __init__(self,snr_filenames,dndzdmag_filename,total_density=None,
+                    use_v2_weights=False):
         # Lya P3D defined at this redshift
         self.zref=2.25
         # Cosmological model
@@ -18,9 +20,9 @@ class FisherForecast(object):
         # Lya P3D theory
         self.LyaP3D = P3D.TheoryLyaP3D(self.cosmo)
         # quasar luminosity function
-        self.QLF = qLF.QuasarLF()
+        self.QLF = qLF.QuasarLF(filename=dndzdmag_filename,total_density=total_density)
         # spectrograph
-        self.spec = sp.Spectrograph(band='g')
+        self.spec = sp.Spectrograph(filenames=snr_filenames)
         # survey (should probably be its own object at some point...)
         self.area_deg2 = 14000.0
         # each mini-survey will cover only (lmin,lmax)
@@ -39,11 +41,18 @@ class FisherForecast(object):
         self.lrmin = 985.0
         self.lrmax = 1200.0
         # S/N weights evaluated at this Fourier mode
-        self.kt_w_deg=7.0 # ~ 0.1 h/Mpc
-        self.kp_w_kms=0.001 # ~ 0.1 h/Mpc
+        self.kt_w_deg=2.4 # ~ 0.035 h/Mpc (k=0.05, mu=0.72)
+        self.kp_w_kms=0.00035 # ~ 0.035 h/Mpc (k=0.05, mu=0.72)
+        # If this flag is set, it will use an alternative way to compute weights
+        self.use_v2_weights=use_v2_weights
+        print('use v2 weight',self.use_v2_weights)
+        if self.use_v2_weights: 
+            print("yes")
+        else:
+            print("no")
         # verbosity level
         self.verbose = 1
-
+    
     def mean_z(self):
         """ given wavelength range covered in bin, compute central redshift"""
         l = np.sqrt(self.lmin*self.lmax)
@@ -333,8 +342,10 @@ class FisherForecast(object):
         for i in range(Niter):
             if self.verbose > 1:
                 print(i,'<w>',np.mean(weights))
-            weights = self.Weights1(P3D_degkms,P1D_kms,zq,lc,mags,weights)
-            #weights = self.Weights2(P3D_degkms,P1D_kms,zq,lc,mags,weights)
+            if self.use_v2_weights:
+                weights = self.Weights2(P3D_degkms,P1D_kms,zq,lc,mags,weights)
+            else:
+                weights = self.Weights1(P3D_degkms,P1D_kms,zq,lc,mags,weights)
             if self.verbose > 2:
                 print('weights',weights)
         return weights
@@ -348,10 +359,16 @@ class FisherForecast(object):
         lrc = np.sqrt(self.lrmin*self.lrmax)
         zq = lc/lrc-1.0
         if self.verbose>0:
+            print(self.lmin,'<l<',self.lmax)
+            print(self.lrmin,'<lr<',self.lrmax)
             print('lc, lrc, zq =',lc,lrc,zq)
         # evaluate P1D and P3D for weighting
         P3D_w = self.FluxP3D_degkms(self.kt_w_deg,self.kp_w_kms)
         P1D_w = self.FluxP1D_kms(self.kp_w_kms)
+        if self.verbose>1:
+            print('z=',self.mean_z())
+            print(self.kt_w_deg,self.kp_w_kms,'P3D_w,',P3D_w)
+            print(self.kp_w_kms,'P1D_w,',P1D_w)
 
         # The code below is closer to the method described in the publication,
         # but the c++ code by Pat is more complicated. 
@@ -389,6 +406,7 @@ class FisherForecast(object):
         # PNeff in McDonald & Eisenstein (2007)
         PN_eff = I3*lp/I1/I1/Lq
         if self.verbose > 0:
+            print('Lq',Lq,', lp',lp)
             print('np_eff, Pw2D, PN_eff =',np_eff,Pw2D,PN_eff)
         return np_eff,Pw2D,PN_eff
 
