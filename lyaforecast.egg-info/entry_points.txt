@@ -1,0 +1,2 @@
+[console_scripts]
+run-bao-forecast = lyaforecast.scripts.run_bao_forecast:main

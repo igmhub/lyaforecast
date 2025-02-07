@@ -2,28 +2,22 @@ import numpy as np
 import pylab
 import scipy.interpolate
 
-class QuasarLF(object):
+class QuasarLF:
     """Class to describe a quasar luminosity function"""
 
-    def __init__(self,filename,total_density=None):
+    def __init__(self):
         """Construct object, probably with files describing QL"""
-        self._setup_YecheFile(filename,total_density)
-        
-    def _setup_YecheFile(self,filename,total_density=None):
+        self._setup_YecheFile()
+
+    def _setup_YecheFile(self):
         """Setup objects from file"""
-        print("reading",filename,"in QuasarLF:_setup_YecheFile")
+        # use file from Christophe / Nathalie
+        fname = '../data/dNdzdg_QSO.dat'
         # read table       
-        tz,tm,tdNdmdzddeg2 = pylab.loadtxt(filename,unpack=True)
-        z = np.unique(tz)
-        m = np.unique(tm)
-        if total_density is not None :
-            # the requirement is 50 quasars per square degree above 2.15
-            z_min_lya = 2.15
-            current_total_density = np.sum(tdNdmdzddeg2[tz>z_min_lya])
-            print("Scaling dndzdmag from a total density (z>={}) of {} to {}/deg2".format(z_min_lya,current_total_density,total_density))
-            tdNdmdzddeg2 *= (total_density/current_total_density)
-        
-        print("WARNING!!! assume dz=0.2, dm=0.5")
+        z,m,tdNdmdzddeg2 = pylab.loadtxt(fname,unpack=True)
+        z = np.unique(z)
+        m = np.unique(m)
+        # assume dz=0.2, dm=0.5
         dz=0.2
         dm=0.5
         tdNdmdzddeg2 /= (dz*dm)

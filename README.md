@@ -19,7 +19,6 @@ To do:
 
 Required libraries:
  - numpy
- - pylab
  - scipy
  - camb (Python module for CAMB)
  

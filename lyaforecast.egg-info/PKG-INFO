@@ -1,0 +1,7 @@
+Metadata-Version: 2.2
+Name: lyaforecast
+Version: 0.1.0
+Summary: A package to forecast cosmological constraints from Lyman-alpha surveys.
+Author-email: Andreu Font-Ribera <afont@ifae.es>, Julien Guy <jguy@lbl.gov>, Calum Gordon <cgordon@ifae.es>
+Project-URL: repository, https://github.com/igmhub/lyaforecast.git
+License-File: LICENSE
