@@ -1,1 +1,0 @@
-"""Plot power spectra and parameter error bars as functions of survey properties."""
