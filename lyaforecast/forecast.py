@@ -9,8 +9,7 @@ from lyaforecast.spectrograph import Spectrograph
 from lyaforecast.survey import Survey
 from lyaforecast.covariance import Covariance
 from lyaforecast.power_spectrum import PowerSpectrum
-
-
+from lyaforecast.plots import Plots
 
 
 class Forecast:
@@ -51,6 +50,8 @@ class Forecast:
         #  that stores info and methods to compute p3d and its variance
         self.covariance = Covariance(self.config, self.cosmo, self.survey, 
                                      self.spectrograph, self.power_spec)
+        
+        self.plots = Plots(self.config)
 
         init_end_time = time.time()
         print(f"Forecast initialized in {init_end_time - init_start_time:.4f} seconds.")
@@ -58,24 +59,19 @@ class Forecast:
     def run_bao_forecast(self):
         print('Running BAO forecast')
 
-        z_bin_centers = "1.96,2.12,2.28,2.43,2.59,2.75,2.91,3.07,3.23,3.39,3.55"
-        zz = np.array(z_bin_centers.split(",")).astype(float)
-        #dz = np.diff(zz)
-        dz = np.zeros(zz.size)
-        dz[1:-1] = (zz[2:]-zz[:-2])/2.
-        dz[0]   = zz[1]-zz[0]
-        dz[-1]  = zz[-1]-zz[-2]
-        
+        zz = [self.covariance.zmin + (i) * 
+               (self.covariance.zmax - self.covariance.zmin)/self.covariance.num_z_bins
+                 for i in np.arange(self.covariance.num_z_bins+1)]
         #arrays to store bao info
-        sigma_log_da = np.zeros(zz.size)
-        sigma_log_dh = np.zeros(zz.size)
-        corr_coef = np.zeros(zz.size)
+        sigma_log_da = np.zeros(self.covariance.num_z_bins)
+        sigma_log_dh = np.zeros(self.covariance.num_z_bins)
+        corr_coef = np.zeros(self.covariance.num_z_bins)
 
-        for iz in range(zz.size) :
+        for iz in range(len(zz)-1):
             #limits of individual redshift bins
-            z1=zz[iz]-dz[iz]/2
-            z2=zz[iz]+dz[iz]/2
-            print("z bin = [{}-{}]".format(z1,z2))
+            z1=zz[iz]
+            z2=zz[iz+1]
+            print(f"z bin = [{z1}-{z2}], bin centre = {z1 + (z2-z1)/2}")
 
             # observed wavelength range from redshift limits, used to calculate mean 
             # redshifts and evolve biases.
@@ -175,12 +171,19 @@ class Forecast:
             sigma_log_da[iz] = np.sqrt(cov[1,1])    
             corr_coef[iz] = cov[0,1]/np.sqrt(cov[0,0]*cov[1,1])
             
+        # these aren't log-spaced right?
         print("# z sigma_log_da sigma_log_dh correlation")
-        for i in range(zz.size) :
+        for i in range(len(zz)-1) :
             print("{},{},{},{}".format(zz[i],sigma_log_da[i],sigma_log_dh[i],corr_coef[i]))
 
         print("\n Combined: sigma_log_da={} sigma_log_dh={}".format(1./np.sqrt(np.sum(1./sigma_log_da**2)),
                                                                     1./np.sqrt(np.sum(1./sigma_log_dh**2))))
+
+
+        
+    def get_cosmo_params(self):
+        pass
+
 
 
                 

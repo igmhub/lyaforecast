@@ -24,7 +24,11 @@ class Covariance:
         self._mu_max = _properties.getfloat('mu_max', 1)
         self._num_mu_bins = _properties.getint('num_mu_bins', 10)
         #True to ignore small-scale components of power spectra.
-        self._linear = _properties.get('linear_power')
+        self._linear = _properties.getboolean('linear power')
+        # z bins to eval model
+        self.zmin = _properties.getfloat('z bin min', 2)
+        self.zmax = _properties.getfloat('z bin max', 4)
+        self.num_z_bins = _properties.getint('num z bins', 1)
 
 
         #Fourier mode to evaluate S/N weights
