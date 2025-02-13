@@ -25,11 +25,9 @@ class Covariance:
         self._num_mu_bins = _properties.getint('num_mu_bins', 10)
         #True to ignore small-scale components of power spectra.
         self._linear = _properties.getboolean('linear power')
-        # z bins to eval model
-        self.zmin = _properties.getfloat('z bin min', 2)
-        self.zmax = _properties.getfloat('z bin max', 4)
-        self.num_z_bins = _properties.getint('num z bins', 1)
-
+        
+        #whether to iterate over magnitude instead of redshift
+        self.per_mag = config['control'].getboolean('per mag')
 
         #Fourier mode to evaluate S/N weights
         self._get_eval_mode(config)
@@ -50,7 +48,7 @@ class Covariance:
         self.lmin = None
         self.lmax = None
         self._aliasing_weights = None
-        self._effecitve_noise_power = None
+        self._effective_noise_power = None
 
         # verbosity level - I'll remove this later.
         self.verbose = 1
@@ -175,7 +173,8 @@ class Covariance:
         dhmpc_ddeg = self.cosmo.distance_from_degrees(z)
         kt_deg = kt_hmpc * dhmpc_ddeg
 
-        # get total power in units of observed coordinates
+        # get total power in units of observed coordinates 
+        # To-do: get P_total(mag)
         total_power_degkms = self._compute_total_3d_power(kt_deg,kp_kms)
         # convert into units of (Mpc/h)^3
         total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dhmpc
@@ -186,6 +185,11 @@ class Covariance:
         # use 0 < mu < 1 and they used -1 < mu < 1
         num_modes = volume_hmpc * k_hmpc**2 * self._dk * self._dmu / 2 * np.pi**2
         power_variance = 2 * total_power_hmpc**2 / num_modes
+
+        #If not per magnitude, return power var for mmax only. 
+        # Otherwise as a function of m input.
+        if not self.per_mag:
+            power_variance = power_variance[-1]
 
         return power_variance
 
@@ -199,16 +203,21 @@ class Covariance:
         dndm_degdz = self.survey.get_qso_lum_func(zq,mags)
         dndm_degkms = dndm_degdz / dkms_dz
         dm = mags[1] - mags[0]
+        integrand = dndm_degkms * weights
         # weighted density of quasars
-        I1 = np.sum(dndm_degkms*weights)*dm
+        #I1 = np.sum(dndm_degkms * weights) * dm
+        #move to using cumsum so we can plot as a function of magnitude
+        int_1 = np.cumsum(integrand) * dm
+
         if self.verbose > 2:
             print('dkms_dz',dkms_dz)
             print('dndm_degdz',dndm_degdz)
             print('dndm_degkms',dndm_degkms)
             print('mags',mags)
-            print('integrant',dndm_degkms*weights)
-            print('I1',I1)
-        return I1
+            print('integrant',dndm_degkms * weights)
+            print('I1',int_1)
+
+        return int_1
 
     def _compute_int_2(self,zq,mags,weights):
         """Integral 2 in McDonald & Eisenstein (2007).
@@ -218,21 +227,25 @@ class Covariance:
         dkms_dz = self.cosmo.SPEED_LIGHT / (1+zq)
         dndm_degkms = dndm_degdz / dkms_dz
         dm = mags[1]-mags[0]
-        I2 = np.sum(dndm_degkms*weights*weights)*dm
-        return I2
+        integrand = dndm_degkms * weights**2
+        int_2 = np.cumsum(integrand) * dm
+
+        return int_2
 
     def _compute_int_3(self,zq,lc,mags,weights):
         """Integral 3 in McDonald & Eisenstein (2007).
             It is used to set the effective noise power."""
         # pixel noise variance (dimensionless)
-        varN = self._get_var_m(zq,lc,mags)
+        pixel_var = self._get_var_m(zq,lc,mags)
         # quasar number density
         dndm_degdz = self.survey.get_qso_lum_func(zq,mags)
-        dkms_dz = self.cosmo.SPEED_LIGHT / (1+zq)
+        dkms_dz = self.cosmo.SPEED_LIGHT / (1 + zq)
         dndm_degkms = dndm_degdz / dkms_dz
-        dm = mags[1]-mags[0]
-        I3 = np.sum(dndm_degkms*weights*weights*varN)*dm
-        return I3
+        dm = mags[1] - mags[0]
+        integrand = dndm_degkms * weights**2 * pixel_var
+        int_3 = np.cumsum(integrand) * dm
+
+        return int_3
 
     def _get_np_eff(self,zq,mags,weights):
         """Effective density of pixels in deg km/s, n_p^eff in McDonald & Eisenstein (2007).
@@ -246,6 +259,7 @@ class Covariance:
             print('I1',I1)
             print('Npix',Npix)
             print('np_eff',np_eff)
+
         return np_eff
 
     def _get_var_m(self,zq,lc,mags):
@@ -266,12 +280,12 @@ class Covariance:
             Note this is a 3D power, not 1D, and it is used in 
             constructing the weights as a function of magnitude."""
         # pixel noise variance (dimensionless)
-        varN = self._get_var_m(zq,lc,mags)
+        pixel_var = self._get_var_m(zq,lc,mags)
         # 3D effective density of pixels
         neff = self._get_np_eff(zq,mags,weights)
-        PN = varN / neff
+        PN = pixel_var / neff
         if self.verbose > 2:
-            print('noise variance',varN)
+            print('noise variance', pixel_var)
             print('neff',neff)
             print('PN',PN)
         return PN
@@ -344,13 +358,14 @@ class Covariance:
             print('weights',weights)
         return weights
 
-    def _compute_weights(self,P3D_degkms,P1D_kms,zq,lc,mags,Niter=3):
+    def _compute_weights(self,P3D_degkms,P1D_kms,zq,lc,mags):
         """Compute weights as a function of magnitude. 
             We do it iteratively since the weights depend on I1, and 
             I1 depends on the weights."""
         # compute first weights using only 1D and noise variance
         weights = self._initialise_weights(P1D_kms,zq,lc,mags)
-        for i in range(Niter):
+        num_iter = 3
+        for i in range(num_iter):
             if self.verbose > 1:
                 print(i,'<w>',np.mean(weights))
             weights = self._weights1(P3D_degkms,P1D_kms,zq,lc,mags,weights)
@@ -367,8 +382,8 @@ class Covariance:
         # redshift of quasar for which forest is centered in z
         lrc = np.sqrt(self.survey.lrmin * self.survey.lrmax)
         zq = (lc / lrc) - 1.0
-        if self.verbose>0:
-            print('mean wave, mean rest wave, z qso =',lc,lrc,zq)
+        #if self.verbose>0:
+        #    print('mean wave, mean rest wave, z qso =',lc,lrc,zq)
         
         # evaluate P1D and P3D for weighting
         #the range of k values here will be the same as in the analysis.
@@ -386,13 +401,12 @@ class Covariance:
         # absorption and over quasar redshift.
 
         # set range of magnitudes used (same as in c++ code)
-        mmin = self.survey.mag_min
-        mmax = self.survey.mag_max
-        # same binning as in c++ code
-        dm = 0.025
-        n_mag_bins = int((mmax-mmin)/dm)
-        mags = np.linspace(mmin,mmax,n_mag_bins)
-        # get weights (iteratively)
+        mags = self.survey.maglist
+        # same binning as in c++ code (calum: not sure why necessary?)
+        # dm = 0.025
+        # n_mag_bins = int((mmax-mmin)/dm)
+        # mags = np.linspace(mmin,mmax,n_mag_bins)
+        # get weights(mag) (iteratively)
         weights = self._compute_weights(p3d_w,p1d_w,zq,lc,mags)
 
         # given weights, compute integrals in McDonald & Eisenstein (2007)

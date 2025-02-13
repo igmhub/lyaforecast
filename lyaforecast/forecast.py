@@ -50,8 +50,6 @@ class Forecast:
         #  that stores info and methods to compute p3d and its variance
         self.covariance = Covariance(self.config, self.cosmo, self.survey, 
                                      self.spectrograph, self.power_spec)
-        
-        self.plots = Plots(self.config)
 
         init_end_time = time.time()
         print(f"Forecast initialized in {init_end_time - init_start_time:.4f} seconds.")
@@ -59,19 +57,26 @@ class Forecast:
     def run_bao_forecast(self):
         print('Running BAO forecast')
 
-        zz = [self.covariance.zmin + (i) * 
-               (self.covariance.zmax - self.covariance.zmin)/self.covariance.num_z_bins
-                 for i in np.arange(self.covariance.num_z_bins+1)]
+        zz = np.linspace(self.survey.zmin, self.survey.zmax, self.survey.num_z_bins+1)
         #arrays to store bao info
-        sigma_log_da = np.zeros(self.covariance.num_z_bins)
-        sigma_log_dh = np.zeros(self.covariance.num_z_bins)
-        corr_coef = np.zeros(self.covariance.num_z_bins)
+
+        if self.covariance.per_mag:
+            sigma_log_dh = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
+            sigma_log_da = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
+            corr_coef = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
+        else:
+            sigma_log_da = np.zeros(self.survey.num_z_bins)
+            sigma_log_dh = np.zeros(self.survey.num_z_bins)
+            corr_coef = np.zeros(self.survey.num_z_bins)
+
+        z_bin_centres = np.zeros(self.survey.num_z_bins)
 
         for iz in range(len(zz)-1):
             #limits of individual redshift bins
             z1=zz[iz]
             z2=zz[iz+1]
-            print(f"z bin = [{z1}-{z2}], bin centre = {z1 + (z2-z1)/2}")
+            z_bin_centres[iz] = z1 + (z2-z1)/2
+            print(f"z bin = [{z1}-{z2}], bin centre = {z_bin_centres[iz]}")
 
             # observed wavelength range from redshift limits, used to calculate mean 
             # redshifts and evolve biases.
@@ -100,7 +105,12 @@ class Forecast:
             #vectorise power_spec computations.
             
             #empty array for fisher information
-            fisher_matrix = np.zeros((2,2))            
+            #if per magnitude add extra dimension
+            #will expand for SNR too.
+            if self.covariance.per_mag:
+                fisher_matrix = np.zeros((2,2,self.survey.num_mag_bins))
+            else:
+                fisher_matrix = np.zeros((2,2))            
             
             for i, mu in enumerate(self.covariance.mu):
 
@@ -162,22 +172,52 @@ class Forecast:
                 # dlog(k)/dat    = (1-mu2)
                 # dmodel/dap     = dmodel/dlog(k)*dlog(k)/dap    = dmodeldlk * mu2
                 # dmodel/dat     = dmodel/dlog(k)*dlog(k)/dat    = dmodeldlk * (1-mu2)
-                
                 h = [mu**2,(1 - mu**2)]
-                fisher_matrix += np.outer(h,h) * np.sum(dmodel_dlk**2 / p3d_variance)
-
-            cov = np.linalg.inv(fisher_matrix)
-            sigma_log_dh[iz] = np.sqrt(cov[0,0])
-            sigma_log_da[iz] = np.sqrt(cov[1,1])    
-            corr_coef[iz] = cov[0,1]/np.sqrt(cov[0,0]*cov[1,1])
+                if self.covariance.per_mag:
+                    fisher_matrix += np.outer(h,h)[:,:,None] * np.sum(dmodel_dlk**2 / p3d_variance.T, axis=1).T
+                else:
+                    fisher_matrix += np.outer(h,h) * np.sum(dmodel_dlk**2 / p3d_variance)
             
-        # these aren't log-spaced right?
-        print("# z sigma_log_da sigma_log_dh correlation")
-        for i in range(len(zz)-1) :
-            print("{},{},{},{}".format(zz[i],sigma_log_da[i],sigma_log_dh[i],corr_coef[i]))
+            if self.covariance.per_mag:
+                cov = np.linalg.inv(fisher_matrix.T)
+                cov_diag = np.diagonal(cov.T,axis1=0,axis2=1)
+                sigma_log_dh[iz] = np.sqrt(cov_diag.T[0])
+                sigma_log_da[iz] = np.sqrt(cov_diag.T[1])
+                corr_coef[iz] = cov.T[0,1]/np.sqrt(cov_diag.T[0]*cov_diag.T[1])
 
-        print("\n Combined: sigma_log_da={} sigma_log_dh={}".format(1./np.sqrt(np.sum(1./sigma_log_da**2)),
-                                                                    1./np.sqrt(np.sum(1./sigma_log_dh**2))))
+                print("ap={},at={},corr={}".format(sigma_log_da[iz][-1],
+                                        sigma_log_dh[iz][-1],corr_coef[iz][-1]))
+            else:
+                cov = np.linalg.inv(fisher_matrix)
+                sigma_log_dh[iz] = np.sqrt(cov[0,0])
+                sigma_log_da[iz] = np.sqrt(cov[1,1])    
+                corr_coef[iz] = cov[0,1]/np.sqrt(cov[0,0]*cov[1,1])
+
+                print("ap={},at={},corr={}".format(sigma_log_da[iz],
+                                        sigma_log_dh[iz],corr_coef[iz]))
+        
+        
+        if self.covariance.per_mag:
+            sigma_log_da_combined_m = 1./np.sqrt(np.sum(1./sigma_log_da**2,axis=0))
+            sigma_log_dh_combined_m = 1./np.sqrt(np.sum(1./sigma_log_dh**2,axis=0))
+            sigma_log_da_combined = sigma_log_da_combined_m[-1]
+            sigma_log_dh_combined = sigma_log_dh_combined_m[-1]
+        else:
+            sigma_log_da_combined = 1./np.sqrt(np.sum(1./sigma_log_da**2))
+            sigma_log_dh_combined = 1./np.sqrt(np.sum(1./sigma_log_dh**2))
+
+        #these aren't log-spaced right?
+
+        print(f'\n Combined: sigma_log_da={sigma_log_da_combined}'
+                    f', sigma_log_dh={sigma_log_dh_combined}')
+       
+        data = {}
+        data["redshifts"] = zz,
+        data["magnitudes"] = {self.survey.band:self.survey.maglist}
+        data["at_err"] = sigma_log_da,
+        data["ap_err"] = sigma_log_dh
+        #initialise plotter
+        #self.plots = Plots(self.config,data)
 
 
         
