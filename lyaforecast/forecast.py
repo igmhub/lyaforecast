@@ -2,6 +2,7 @@
 import configparser
 import numpy as np
 import time 
+from pathlib import Path
 
 from lyaforecast.utils import get_file
 from lyaforecast.cosmoCAMB import CosmoCamb
@@ -31,6 +32,9 @@ class Forecast:
         self.config = configparser.ConfigParser()
         self.config.optionxform = lambda option: option
         self.config.read(get_file(cfg_path))
+
+        self.out_file = Path(self.config['output']['filename'])
+        self.out_folder = self.out_file.parent
 
         print('Initialise forecast')
         #initialise cosmology
@@ -203,6 +207,8 @@ class Forecast:
             sigma_log_da_combined = sigma_log_da_combined_m[-1]
             sigma_log_dh_combined = sigma_log_dh_combined_m[-1]
         else:
+            sigma_log_da_combined_m = None
+            sigma_log_dh_combined_m = None
             sigma_log_da_combined = 1./np.sqrt(np.sum(1./sigma_log_da**2))
             sigma_log_dh_combined = 1./np.sqrt(np.sum(1./sigma_log_dh**2))
 
@@ -212,16 +218,25 @@ class Forecast:
                     f', sigma_log_dh={sigma_log_dh_combined}')
        
         data = {}
-        data["redshifts"] = zz,
+        data["redshifts"] = zz
+        data["mean redshift"] = self.cosmo.z_ref
         data["magnitudes"] = {self.survey.band:self.survey.maglist}
-        data["at_err"] = sigma_log_da,
-        data["ap_err"] = sigma_log_dh
+        data["at_err"] = sigma_log_da_combined
+        data["ap_err"] = sigma_log_dh_combined
+        data['ap_err_m'] = sigma_log_da_combined_m
+        data['at_err_m'] = sigma_log_dh_combined_m
+        
         #initialise plotter
-        #self.plots = Plots(self.config,data)
+        self.plots = Plots(self.config,self.survey,data)
+
+        if self.plots.plot_distances&self.covariance.per_mag:
+            self.plots.plot_da_h_m()
+            self.plots.fig.savefig(self.out_folder.joinpath('dap_dat_dm.png'))
 
 
         
     def get_cosmo_params(self):
+        
         pass
 
 
