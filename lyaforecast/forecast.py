@@ -54,12 +54,17 @@ class Forecast:
         #  that stores info and methods to compute p3d and its variance
         self.covariance = Covariance(self.config, self.cosmo, self.survey, 
                                      self.spectrograph, self.power_spec)
-
+        
+        self.plots = Plots(self.config,self.survey)
         init_end_time = time.time()
         print(f"Forecast initialized in {init_end_time - init_start_time:.4f} seconds.")
 
     def run_bao_forecast(self):
         print('Running BAO forecast')
+
+        areas = np.array(self.survey.area_deg2)
+        resolutions = np.array(self.survey.res_kms)
+        qso_densities = np.array(self.survey.qso_density)
 
         zz = np.linspace(self.survey.zmin, self.survey.zmax, self.survey.num_z_bins+1)
         #arrays to store bao info
@@ -75,12 +80,21 @@ class Forecast:
 
         z_bin_centres = np.zeros(self.survey.num_z_bins)
 
+        #either this or using high dimensional matrices
+        #for area in areas:
+        #    for resolution in resolutions:
+        #        for density in densities:
+        #    
         for iz in range(len(zz)-1):
             #limits of individual redshift bins
             z1=zz[iz]
             z2=zz[iz+1]
-            z_bin_centres[iz] = z1 + (z2-z1)/2
-            print(f"z bin = [{z1}-{z2}], bin centre = {z_bin_centres[iz]}")
+            z_bin_centre = z1 + (z2-z1)/2
+            z_bin_centres[iz] = z_bin_centre
+            print(f"z bin = [{z1}-{z2}], bin centre = {z_bin_centre}")
+
+            #store info in plots
+            #self.plots.z_bin_centres[str()]
 
             # observed wavelength range from redshift limits, used to calculate mean 
             # redshifts and evolve biases.
@@ -123,6 +137,13 @@ class Forecast:
 
                 p3d_variance = np.array([self.covariance.compute_3d_power_variance(k,mu) 
                                     for k in self.covariance.k]) # (Mpc/h)**6
+                #not making a great approximation here.
+                if i==0:
+                    self.plots.p3d[str(z_bin_centre)] = p3d * self.covariance.dmu
+                    self.plots.var_p3d[str(z_bin_centre)] = (1/self.covariance.mu.size)**2 * np.diagonal(p3d_variance)
+                else:
+                    self.plots.p3d[str(z_bin_centre)] += p3d * self.covariance.dmu
+                    self.plots.var_p3d[str(z_bin_centre)] += (1/self.covariance.mu.size)**2 * np.diagonal(p3d_variance)               
 
                 # compute a smooth version of p3d
                 # not sure how to do much better than a polynomial fit
@@ -226,13 +247,19 @@ class Forecast:
         data['ap_err_m'] = sigma_log_da_combined_m
         data['at_err_m'] = sigma_log_dh_combined_m
         
-        #initialise plotter
-        self.plots = Plots(self.config,self.survey,data)
+        #load data to plots instance
+        self.plots(data,self.covariance)
 
-        if self.plots.plot_distances&self.covariance.per_mag:
-            self.plots.plot_da_h_m()
-            self.plots.fig.savefig(self.out_folder.joinpath('dap_dat_dm.png'))
-
+        if self.plots.plot_bao:
+            if self.covariance.per_mag:
+                self.plots.plot_da_h_m()
+                self.plots.fig.savefig(self.out_folder.joinpath('dap_dat_dm.png'))
+        if self.plots.plot_p3d:
+                self.plots.plot_p3d_z()
+                self.plots.fig.savefig(self.out_folder.joinpath('pk_z.png'))
+        if self.plots.plot_p3d_var:
+                self.plots.plot_var_p3d_z()
+                self.plots.fig.savefig(self.out_folder.joinpath('var_pk_z.png'))
 
         
     def get_cosmo_params(self):

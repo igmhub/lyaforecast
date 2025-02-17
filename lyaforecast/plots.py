@@ -1,20 +1,47 @@
 """Plot power spectra and parameter error bars as functions of survey properties."""
 import matplotlib.pyplot as plt
+import numpy as np
 class Plots:
-    def __init__(self,config,survey,data) -> None:
-        self.plot_distances = config['control'].getboolean('plot distances')
-        #We will require in some cases that n_redshift_bins > 1.
-        n_redshift_bins = config['power spectrum'].getint('num z bins')
-        #check magnitude band
+    def __init__(self, config,survey):
+        """
+        Initialize Plots instance with configuration and survey details.
+
+        Parameters
+        ----------
+        config : configparser.ConfigParser
+            Configuration file for Lyman-alpha forest forecast.
+        survey : Survey
+            Instance of Survey class containing survey properties.
+        """
+        self.plot_bao = config['control'].getboolean('plot bao')
+        self.plot_p3d = config['control'].getboolean('plot p3d')
+        self.plot_p3d_var = config['control'].getboolean('plot p3d var')
+
+        # We will require in some cases that n_redshift_bins > 1.
+        self.n_redshift_bins = config['power spectrum'].getint('num z bins')
+        # Check magnitude band
         self.survey = survey
-        self.data = data
+        self.z_bin_centres = {}
+        self.p3d = {}
+        self.var_p3d = {}
+
+    #May not need a call but do it for now.
+    def __call__(self,data,covariance):
+        """
+        Parameters
+        ----------
+        data : dict
+            Contains data used in plotting routines.
+        """
+        self._data = data
+        self._covariance = covariance
 
 
     def plot_da_h_m(self):
-        ap = self.data['ap_err_m'] * 100
-        at = self.data['at_err_m'] * 100
+        ap = self._data['ap_err_m'] * 100
+        at = self._data['at_err_m'] * 100
         band = self.survey.band
-        mags = self.data['magnitudes'][band]
+        mags = self._data['magnitudes'][band]
 
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,1,figsize=(10,6))
@@ -24,8 +51,45 @@ class Plots:
             ax.set_ylabel(f'% error')
             ax.legend()
             ax.grid()
-
+            ax.set_yscale('linear')
             self.fig = fig
+
+    def plot_p3d_z(self):
+        with self._make_style()[0], self._make_style()[1]: 
+            fig,ax = plt.subplots(1,1,figsize=(10,6))
+            ax.set_xlabel(fr'k')
+            ax.set_ylabel(fr'$kP(k)\pi$')
+            ax.set_xlim(0.03,0.3)
+            ax.autoscale(axis='y')
+            ax.grid()
+            ax.set_yscale('log')
+
+            for key in self.p3d:
+                ax.errorbar(self._covariance.k,
+                        self._covariance.k * self.p3d[key] / np.pi,yerr=0,#self.var_p3d[key],
+                        label=f'z = {key}')
+            
+            ax.legend()
+            
+            self.fig = fig
+
+    def plot_var_p3d_z(self):
+        with self._make_style()[0], self._make_style()[1]: 
+            fig,ax = plt.subplots(1,1,figsize=(10,6))
+            ax.set_xlabel(fr'k')
+            ax.set_ylabel(f'var[P(k)]')
+            ax.grid()
+            ax.set_yscale('log')
+
+            for key in self.p3d:
+                ax.plot(self._covariance.k,
+                        self.var_p3d[key],
+                        label=f'z = {key}')
+                
+            ax.legend()
+            
+            self.fig = fig
+
 
     def _make_style(self,style='seaborn-1'):
         """Apply a Seaborn style with additional customizations."""

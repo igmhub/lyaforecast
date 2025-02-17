@@ -41,7 +41,7 @@ class Covariance:
         #bin edges
         mu_edges = np.linspace(self._mu_min,self._mu_max, self._num_mu_bins)
         self.mu = mu_edges[:-1] + np.diff(mu_edges)/2     
-        self._dmu = np.diff(mu_edges)[0]
+        self.dmu = np.diff(mu_edges)[0]
 
         # These will be dependent on redshift bins, 
         # which are passed during foreacast run (for now).
@@ -139,60 +139,6 @@ class Covariance:
 
         return power_hmpc
 
-
-    def _compute_total_3d_power(self,kt_deg,kp_kms):
-        """Sum of 3D Lya power, aliasing and effective noise power. 
-            If Pw2D or PN_eff are not passed, it will compute them"""
-        # figure out mean redshift of the mini-survey
-        z = self._mean_z()
-        # signal
-        p3d = self._compute_p3d_kms(kt_deg,kp_kms)
-        # P1D for aliasing
-        p1d = self._compute_p1d_kms(kp_kms)
-        # previously computed p2wd and pn_eff.
-        total_power = p3d + self._aliasing_weights * p1d + self._effecitve_noise_power
-        return total_power
-
-    def compute_3d_power_variance(self,k_hmpc,mu
-                        ):
-        """Variance of 3D Lya power, in units of (Mpc/h)^3.
-            Note that here 0 < mu < 1.
-            If Pw2D or PN_eff are not passed, it will compute them"""
-        
-        #We should move to computing this in a vectorised fashion, rather than 
-        #iterating over mu/k values. Then I wouldn't have to call the mu/k values
-        # again.
-        z = self._mean_z()
-
-        # decompose into line of sight and transverse components
-        kp_hmpc = k_hmpc * mu
-        kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
-        # transform from comoving to observed coordinates
-        dkms_dhmpc = self.cosmo.velocity_from_distance(z)
-        kp_kms = kp_hmpc / dkms_dhmpc
-        dhmpc_ddeg = self.cosmo.distance_from_degrees(z)
-        kt_deg = kt_hmpc * dhmpc_ddeg
-
-        # get total power in units of observed coordinates 
-        # To-do: get P_total(mag)
-        total_power_degkms = self._compute_total_3d_power(kt_deg,kp_kms)
-        # convert into units of (Mpc/h)^3
-        total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dhmpc
-        # survey volume in units of (Mpc/h)^3
-        volume_degkms = self.survey.area_deg2 * self._get_redshift_depth()
-        volume_hmpc = volume_degkms * dhmpc_ddeg**2 / dkms_dhmpc
-        # based on Eq 8 in Seo & Eisenstein (2003), but note that here we
-        # use 0 < mu < 1 and they used -1 < mu < 1
-        num_modes = volume_hmpc * k_hmpc**2 * self._dk * self._dmu / 2 * np.pi**2
-        power_variance = 2 * total_power_hmpc**2 / num_modes
-
-        #If not per magnitude, return power var for mmax only. 
-        # Otherwise as a function of m input.
-        if not self.per_mag:
-            power_variance = power_variance[-1]
-
-        return power_variance
-
     def _compute_int_1(self,zq,mags,weights):
         """Integral 1 in McDonald & Eisenstein (2007).
             It represents an effective density of quasars, and it depends
@@ -208,6 +154,7 @@ class Covariance:
         #I1 = np.sum(dndm_degkms * weights) * dm
         #move to using cumsum so we can plot as a function of magnitude
         int_1 = np.cumsum(integrand) * dm
+        
 
         if self.verbose > 2:
             print('dkms_dz',dkms_dz)
@@ -229,7 +176,7 @@ class Covariance:
         dm = mags[1]-mags[0]
         integrand = dndm_degkms * weights**2
         int_2 = np.cumsum(integrand) * dm
-
+        
         return int_2
 
     def _compute_int_3(self,zq,lc,mags,weights):
@@ -270,8 +217,9 @@ class Covariance:
         # noise rms per pixel
         noise_rms = np.zeros_like(mags)
         for i,m in enumerate(mags):
-            noise_rms[i] = self.spectrograph.get_pixel_rms_noise(m,zq,lc,pix_ang)
+            noise_rms[i] = self.spectrograph.get_pixel_rms_noise(m,zq,lc,pix_ang,self.survey.num_exp)
         noise_var = noise_rms**2
+
         return noise_var
 
     def _compute_noise_power_m(self,zq,lc,mags,weights):
@@ -283,12 +231,12 @@ class Covariance:
         pixel_var = self._get_var_m(zq,lc,mags)
         # 3D effective density of pixels
         neff = self._get_np_eff(zq,mags,weights)
-        PN = pixel_var / neff
+        noise_power = pixel_var / neff
         if self.verbose > 2:
             print('noise variance', pixel_var)
             print('neff',neff)
-            print('PN',PN)
-        return PN
+            print('PN',noise_power)
+        return noise_power
 
     def _weights1(self,P3D_degkms,P1D_kms,zq,lc,mags,weights):
         """Compute new weights as a function of magnitude, using P3D.
@@ -424,3 +372,99 @@ class Covariance:
         self._aliasing_weights = int_2 / (int_1 * forest_length)
         # PNeff in McDonald & Eisenstein (2007)
         self._effecitve_noise_power = int_3 * pixel_length / (int_1**2 * forest_length)
+
+
+    def _compute_total_3d_power(self,kt_deg,kp_kms):
+        """Sum of 3D Lya power, aliasing and effective noise power. 
+            If Pw2D or PN_eff are not passed, it will compute them"""
+        # figure out mean redshift of the mini-survey
+        z = self._mean_z()
+        # signal
+        p3d = self._compute_p3d_kms(kt_deg,kp_kms)
+        # P1D for aliasing
+        p1d = self._compute_p1d_kms(kp_kms)
+        # previously computed p2wd and pn_eff.
+        total_power = p3d + self._aliasing_weights * p1d + self._effecitve_noise_power
+        return total_power
+
+    def compute_3d_power_variance(self,k_hmpc,mu
+                        ):
+        """Variance of 3D Lya power, in units of (Mpc/h)^3.
+            Note that here 0 < mu < 1.
+            """
+        
+        #We should move to computing this in a vectorised fashion, rather than 
+        #iterating over mu/k values. Then I wouldn't have to call the mu/k values
+        # again.
+        z = self._mean_z()
+
+        # decompose into line of sight and transverse components
+        kp_hmpc = k_hmpc * mu
+        kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
+        # transform from comoving to observed coordinates
+        dkms_dhmpc = self.cosmo.velocity_from_distance(z)
+        kp_kms = kp_hmpc / dkms_dhmpc
+        dhmpc_ddeg = self.cosmo.distance_from_degrees(z)
+        kt_deg = kt_hmpc * dhmpc_ddeg
+
+        # get total power in units of observed coordinates 
+        # To-do: get P_total(mag)
+        total_power_degkms = self._compute_total_3d_power(kt_deg,kp_kms)
+        # convert into units of (Mpc/h)^3
+        total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dhmpc
+        # survey volume in units of (Mpc/h)^3
+        volume_degkms = self.survey.area_deg2 * self._get_redshift_depth()
+        volume_hmpc = volume_degkms * dhmpc_ddeg**2 / dkms_dhmpc
+        # based on Eq 8 in Seo & Eisenstein (2003), but note that here we
+        # use 0 < mu < 1 and they used -1 < mu < 1
+        num_modes = volume_hmpc * k_hmpc**2 * self._dk * self.dmu / 2 * np.pi**2
+        power_variance = 2 * total_power_hmpc**2 / num_modes
+
+        #If not per magnitude, return power var for mmax only. 
+        # Otherwise as a function of m input.
+        if not self.per_mag:
+            power_variance = power_variance[-1]
+
+        return power_variance
+    
+    def compute_cross_power_variance(self,k_hmpc,mu
+                        ):
+        """Variance of Lya-QSO cross-power, in units of (Mpc/h)^3.
+            From eq.34 of McQuinn and White (2011).
+            Note that here -1 < mu < 1.
+           """
+        
+        #We should move to computing this in a vectorised fashion, rather than 
+        #iterating over mu/k values. Then I wouldn't have to call the mu/k values
+        # again.
+        z = self._mean_z()
+
+        # decompose into line of sight and transverse components
+        kp_hmpc = k_hmpc * mu
+        kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
+        # transform from comoving to observed coordinates
+        dkms_dhmpc = self.cosmo.velocity_from_distance(z)
+        kp_kms = kp_hmpc / dkms_dhmpc
+        dhmpc_ddeg = self.cosmo.distance_from_degrees(z)
+        kt_deg = kt_hmpc * dhmpc_ddeg
+
+        # get total power in units of observed coordinates 
+        # To-do: get P_total(mag)
+        total_power_degkms = self._compute_total_3d_power(kt_deg,kp_kms)
+        # convert into units of (Mpc/h)^3
+        total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dhmpc
+        # survey volume in units of (Mpc/h)^3
+        volume_degkms = self.survey.area_deg2 * self._get_redshift_depth()
+        volume_hmpc = volume_degkms * dhmpc_ddeg**2 / dkms_dhmpc
+        # based on Eq 8 in Seo & Eisenstein (2003), but note that here we
+        # use 0 < mu < 1 and they used -1 < mu < 1
+        num_modes = volume_hmpc * k_hmpc**2 * self._dk * self._dmu / 2 * np.pi**2
+        power_variance = 2 * total_power_hmpc**2 / num_modes
+
+        #If not per magnitude, return power var for mmax only. 
+        # Otherwise as a function of m input.
+        if not self.per_mag:
+            power_variance = power_variance[-1]
+
+        return power_variance
+
