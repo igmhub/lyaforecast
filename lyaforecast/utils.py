@@ -40,6 +40,21 @@ def get_file(path):
     resource = lyacast_path / 'resources' / input_path
     if resource.is_file():
         return resource
+    
+    # Check if it's a data source
+    data = lyacast_path / 'resources/data' / input_path
+    if data.is_file():
+        return data
+    
+    # Check if it's a default config
+    default_cfg = lyacast_path / 'resources/default_configs' / input_path
+    if default_cfg.is_file():
+        return default_cfg
+    
+    # Check if it's a camb config
+    camb_cfg = lyacast_path / 'resources/camb_configs' / input_path
+    if camb_cfg.is_file():
+        return camb_cfg
 
     raise RuntimeError('The path does not exist: ', input_path, 'or', resource)
 
@@ -66,5 +81,10 @@ def get_dir(path):
     resource = lyacast_path / 'resources' / input_path
     if resource.is_dir():
         return resource
+    
+    # Check if it's a data source (folder)
+    data = lyacast_path / 'resources/data' / input_path
+    if data.is_dir():
+        return data
 
     raise RuntimeError('The directory does not exist: ', input_path)

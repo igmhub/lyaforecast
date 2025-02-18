@@ -91,7 +91,7 @@ class Spectrograph:
             self._snr_mat[i,:,:] = pixel_snr_mag.T
 
         # setup interpolator
-        self._snr_interp = RegularGridInterpolator((self._magnitudes,self._zq,self._lambda_obs_m),self._snr_mat)
+        self._snr_interp = RegularGridInterpolator((self._magnitudes,self._zq,self._lambda_obs_m),self._snr_mat,bounds_error=False, fill_value=None)
 
     def _read_desi_file_header(self):
         # expect files with following header
@@ -153,6 +153,7 @@ class Spectrograph:
         # quasar magnitudes in file
         self._magnitudes = np.array(magnitudes)
         self._magnitudes.sort()
+        print(f'WARNING: maximum brightness capped at magnitude {self._magnitudes[0]}')
 
         print("In S/N files:")
         print("pass-band for magnitudes =", self._band)
@@ -184,8 +185,9 @@ class Spectrograph:
           If S/N = 0, or not covered, return very large number."""
         large_noise=1e10  
         if rmag > self._magnitudes[-1]: 
-            print(f'mag {rmag} too faint, returning large noise')
-            return large_noise
+            print('WARNING: extrapolating beyond stored magnitude information')
+        #     print(f'mag {rmag} too faint, returning large noise')
+        #     return large_noise        
         if zq > self._zq[-1] or zq < self._zq[0]: 
             print(f'zqso {zq} out of range, returning large noise')
             return large_noise

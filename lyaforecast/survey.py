@@ -10,8 +10,8 @@ class Survey:
 
     def __init__(self,config):
         #survey conditions (not sure where to put these yet)
-        self.area_deg2 = config['survey'].getfloat('survey_area')
-        self.qso_density = config['survey'].getfloat('qso density',None)
+        self.area_deg2 = np.array(config['survey'].get('survey_area').split()).astype('float')[0]
+        self.qso_density = np.array(config['survey'].get('qso density').split()).astype('float')[0]
         # quasar redshift range
         self.zq_min = config['survey'].getfloat('z_qso_min')
         self.zq_max = config['survey'].getfloat('z_qso_max')
@@ -20,13 +20,13 @@ class Survey:
         self.zmax = config['survey'].getfloat('z bin max', 4)
         self.num_z_bins = config['survey'].getint('num z bins', 1)
         # magnitude range and nbins
-        self.mag_min = config['survey'].getfloat('min_band_mag',16.5)
+        self.mag_min = config['survey'].getfloat('min_band_mag',16)
         self.mag_max = config['survey'].getfloat('max_band_mag',23)
         self.num_mag_bins = config['survey'].getint('num mag bins',10)
         self.maglist = np.linspace(self.mag_min,self.mag_max,self.num_mag_bins)
         # pixel width and resolution in km/s (for now)
         self.pix_kms = config['survey'].getfloat('pix_width_kms')
-        self.res_kms = config['survey'].getfloat('pix_res_kms')
+        self.res_kms = np.array(config['survey'].get('pix_res_kms').split()).astype('float')[0]
         # definition of forest (lrmin,lrmax)
         self.lrmin = config['survey'].getfloat('min_rest_frame_lya')
         self.lrmax = config['survey'].getfloat('max_rest_frame_lya')
@@ -34,6 +34,8 @@ class Survey:
         #At one point I will set a bound of lmin > l_obs_lower_limit etc.
         self.l_obs_lower_limit = self.lrmin * (1 + self.zq_min)
         self.l_obs_upper_limit = self.lrmax * (1 + self.zq_max)
+        #number of exposures
+        self.num_exp = config['survey'].getint('num exposures')
 
         #get magnitude band 
         self.band = config['survey'].get('band')
