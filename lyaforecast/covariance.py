@@ -49,9 +49,34 @@ class Covariance:
         self.lmax = None
         self._aliasing_weights = None
         self._effective_noise_power = None
-
+                
         # verbosity level - I'll remove this later.
         self.verbose = 1
+
+    def __call__(self,lmin,lmax):
+        """Load central wavelength, redshift, p3d_w and p1d_w, given wavelength range"""
+        self.lmin = lmin
+        self.lmax = lmax
+        #load central redshift/wavelength of bin
+        self._get_zq_bin()
+
+        #pre-compute power spectra
+        self._p3d_w = self._compute_p3d_kms(self.kt_w_deg,self.kp_w_kms)
+        self._p1d_w = self._compute_p1d_kms(self.kp_w_kms)
+
+
+    def _get_zq_bin(self):
+        # given wavelength range covered in bin, compute central redshift and mean wavelength
+        if not (self.lmin is None or self.lmax is None):
+            # mean wavelenght of bin
+            self._lc = np.sqrt(self.lmin * self.lmax)
+            # redshift of quasar for which forest is centered in z
+            lrc = np.sqrt(self.survey.lrmin * self.survey.lrmax)
+            self._zq = (self._lc / lrc) - 1.0
+
+
+
+
 
     def _get_eval_mode(self,config):
         """Mode at which to evaluate power spectrum PS in weighting (PS / PS + PN)"""
@@ -139,206 +164,159 @@ class Covariance:
 
         return power_hmpc
 
-    def _compute_int_1(self,zq,mags,weights):
+    def _compute_int_1(self,weights):
         """Integral 1 in McDonald & Eisenstein (2007).
             It represents an effective density of quasars, and it depends
             on the current value of the weights, that in turn depend on I1.
             We solve these iteratively (converges very fast)."""
         # quasar number density
-        dkms_dz = self.cosmo.SPEED_LIGHT / (1 + zq)
-        dndm_degdz = self.survey.get_qso_lum_func(zq,mags)
+        dkms_dz = self.cosmo.SPEED_LIGHT / (1 + self._zq)
+        dndm_degdz = self.survey.get_qso_lum_func(self._zq,self.survey.maglist)
         dndm_degkms = dndm_degdz / dkms_dz
-        dm = mags[1] - mags[0]
+        dm = self.survey.maglist[1] - self.survey.maglist[0]
         integrand = dndm_degkms * weights
         # weighted density of quasars
         #I1 = np.sum(dndm_degkms * weights) * dm
         #move to using cumsum so we can plot as a function of magnitude
         int_1 = np.cumsum(integrand) * dm
-        
-
-        if self.verbose > 2:
-            print('dkms_dz',dkms_dz)
-            print('dndm_degdz',dndm_degdz)
-            print('dndm_degkms',dndm_degkms)
-            print('mags',mags)
-            print('integrant',dndm_degkms * weights)
-            print('I1',int_1)
 
         return int_1
 
-    def _compute_int_2(self,zq,mags,weights):
+    def _compute_int_2(self,weights):
         """Integral 2 in McDonald & Eisenstein (2007).
             It is used to set the level of aliasing."""
         # quasar number density
-        dndm_degdz = self.survey.get_qso_lum_func(zq,mags)
-        dkms_dz = self.cosmo.SPEED_LIGHT / (1+zq)
+        dndm_degdz = self.survey.get_qso_lum_func(self._zq,self.survey.maglist)
+        dkms_dz = self.cosmo.SPEED_LIGHT / (1+self._zq)
         dndm_degkms = dndm_degdz / dkms_dz
-        dm = mags[1]-mags[0]
+        dm = self.survey.maglist[1]-self.survey.maglist[0]
         integrand = dndm_degkms * weights**2
         int_2 = np.cumsum(integrand) * dm
         
         return int_2
 
-    def _compute_int_3(self,zq,lc,mags,weights):
+    def _compute_int_3(self,weights):
         """Integral 3 in McDonald & Eisenstein (2007).
             It is used to set the effective noise power."""
         # pixel noise variance (dimensionless)
-        pixel_var = self._get_var_m(zq,lc,mags)
+        pixel_var = self._get_var_m()
         # quasar number density
-        dndm_degdz = self.survey.get_qso_lum_func(zq,mags)
-        dkms_dz = self.cosmo.SPEED_LIGHT / (1 + zq)
+        dndm_degdz = self.survey.get_qso_lum_func(self._zq,self.survey.maglist)
+        dkms_dz = self.cosmo.SPEED_LIGHT / (1 + self._zq)
         dndm_degkms = dndm_degdz / dkms_dz
-        dm = mags[1] - mags[0]
+        dm = self.survey.maglist[1] - self.survey.maglist[0]
         integrand = dndm_degkms * weights**2 * pixel_var
         int_3 = np.cumsum(integrand) * dm
 
         return int_3
 
-    def _get_np_eff(self,zq,mags,weights):
+    def get_np_eff(self,weights):
         """Effective density of pixels in deg km/s, n_p^eff in McDonald & Eisenstein (2007).
             It is used in constructing the weights as a function of mag."""
         # get effective density of quasars
-        I1 = self._compute_int_1(zq,mags,weights)
+        int_1 = self._compute_int_1(weights)
         # number of pixels in a forest
-        Npix = self._get_forest_length() / self.survey.pix_kms
-        np_eff = I1 * Npix
-        if self.verbose > 2:
-            print('I1',I1)
-            print('Npix',Npix)
-            print('np_eff',np_eff)
+        num_pix = self._get_forest_length() / self.survey.pix_kms
+        np_eff = int_1 * num_pix
 
         return np_eff
 
-    def _get_var_m(self,zq,lc,mags):
+    def _get_var_m(self):
         """Noise pixel variance as a function of magnitude (dimensionless)"""
-        z = (lc / self.cosmo.LYA_REST) - 1
+        z = (self._lc / self.cosmo.LYA_REST) - 1
         # pixel width in Angstroms
         pix_ang = self.survey.pix_kms / self.cosmo.velocity_from_wavelength(z)
         # noise rms per pixel
-        noise_rms = np.zeros_like(mags)
-        for i,m in enumerate(mags):
-            noise_rms[i] = self.spectrograph.get_pixel_rms_noise(m,zq,lc,pix_ang,self.survey.num_exp)
+        noise_rms = np.zeros_like(self.survey.maglist)
+        for i,m in enumerate(self.survey.maglist):
+            noise_rms[i] = self.spectrograph.get_pixel_rms_noise(m,self._zq,
+                                                                 self._lc,pix_ang,
+                                                                 self.survey.num_exp)
         noise_var = noise_rms**2
 
         return noise_var
 
-    def _compute_noise_power_m(self,zq,lc,mags,weights):
+    def _compute_noise_power_m(self,weights):
         """Effective noise power as a function of magnitude,
             referred to as P_N(m) in McDonald & Eisenstein (2007).
             Note this is a 3D power, not 1D, and it is used in 
             constructing the weights as a function of magnitude."""
         # pixel noise variance (dimensionless)
-        pixel_var = self._get_var_m(zq,lc,mags)
+        pixel_var = self._get_var_m()
         # 3D effective density of pixels
-        neff = self._get_np_eff(zq,mags,weights)
+        neff = self.get_np_eff(weights)
         noise_power = pixel_var / neff
-        if self.verbose > 2:
-            print('noise variance', pixel_var)
-            print('neff',neff)
-            print('PN',noise_power)
+
         return noise_power
 
-    def _weights1(self,P3D_degkms,P1D_kms,zq,lc,mags,weights):
+    def _weights1(self,weights):
         """Compute new weights as a function of magnitude, using P3D.
             This version of computing the weights is closer to the one
             described in McDonald & Eisenstein (2007)."""
         # 3D noise power as a function of magnitude
-        PN = self._compute_noise_power_m(zq,lc,mags,weights)
+        noise_power = self._compute_noise_power_m(weights)
         # effective 3D density of quasars
-        I1 = self._compute_int_1(zq,mags,weights)
+        I1 = self._compute_int_1(weights)
         # 2D density of lines of sight (units of 1/deg^2)
         n2D_los = I1 * self._get_forest_length()
         # weights include aliasing as signal
-        PS = P3D_degkms + P1D_kms / n2D_los
-        weights = PS/(PS+PN)
-        if self.verbose > 2:
-            print('P3D',P3D_degkms)
-            print('P1D',P1D_kms)
-            print('PN',PN)
-            print('I1',I1)
-            print('n2D_los',n2D_los)
-            print('PA',n2D_los*P1D_kms)
-            print('PS',PS)
-            print('weights',weights)
+        signal_power = self._p3d_w + self._p1d_w / n2D_los
+        weights = signal_power/(signal_power+noise_power)
+
         return weights
 
     #if this is the same why not just use this as default?
-    def _weights2(self,P3D_degkms,P1D_kms,zq,lc,mags,weights):
+    def _weights2(self,weights):
         """Compute new weights as a function of magnitude, using pixel var.
             This version of computing the weights is closer to the c++ code
             developed by Pat McDonald and used in official forecasts of DESI.
             It gives identical results to the Weights1 above."""
         # noise pixel variance as a function of magnitude (dimensionless)
-        varN = self._get_var_m(zq,lc,mags)
+        noise_var = self._get_var_m()
         # pixel variance from P1D (dimensionless)
-        var1D = P1D_kms / self.survey.pix_kms
+        pix_var_1d = self._p1d_w / self.survey.pix_kms
         # effective 3D density of pixels
-        neff = self._get_np_eff(zq,mags,weights)
+        neff = self.get_np_eff(weights)
         # pixel variance from P3D (dimensionless)
-        var3D = P3D_degkms * neff
+        pix_var_3d = self._p3d_w * neff
         # signal variance (include P1D and P3D)
-        varS = var3D + var1D
-        weights = varS/(varS+varN)
-        if self.verbose > 2:
-            print('P3D',P3D_degkms)
-            print('P1D',P1D_kms)
-            print('varN',varN)
-            print('var1D',var1D)
-            print('neff',neff)
-            print('var3D',var3D)
-            print('varS',varS)
-            print('weights',weights)
+        sig_var = pix_var_3d + pix_var_1d
+        weights = sig_var / (sig_var + noise_var)
+
         return weights
 
-    def _initialise_weights(self,P1D_kms,zq,lc,mags):
+    def _initialise_weights(self):
         """Compute initial weights as a function of magnitude, using only
             P1D and noise variance."""
         # noise pixel variance as a function of magnitude (dimensionless)
-        varN = self._get_var_m(zq,lc,mags)
+        noise_var = self._get_var_m()
         # pixel variance from P1D (dimensionless)
-        var1D = P1D_kms / self.survey.pix_kms
-        weights = var1D/(var1D+varN)
-        if self.verbose > 2:
-            print('P1D',P1D_kms)
-            print('varN',varN)
-            print('noise_rms',np.sqrt(varN))
-            print('var1D',var1D)
-            print('weights',weights)
+        pix_var_1d = self._p1d_w / self.survey.pix_kms
+        weights = pix_var_1d / (pix_var_1d + noise_var)
+
         return weights
 
-    def _compute_weights(self,P3D_degkms,P1D_kms,zq,lc,mags):
+    def compute_weights(self):
         """Compute weights as a function of magnitude. 
             We do it iteratively since the weights depend on I1, and 
             I1 depends on the weights."""
         # compute first weights using only 1D and noise variance
-        weights = self._initialise_weights(P1D_kms,zq,lc,mags)
+        weights = self._initialise_weights()
         num_iter = 3
         for i in range(num_iter):
             if self.verbose > 1:
                 print(i,'<w>',np.mean(weights))
-            weights = self._weights1(P3D_degkms,P1D_kms,zq,lc,mags,weights)
-            #weights = self.Weights2(P3D_degkms,P1D_kms,zq,lc,mags,weights)
-            if self.verbose > 2:
-                print('weights',weights)
+            weights = self._weights1(weights)
+            #weights = self.Weights2(weights)
+
         return weights
 
     def compute_eff_density_and_noise(self):
         """Compute effective density of lines of sight and eff. noise power.
             Terms Pw2D and PN_eff in McDonald & Eisenstein (2007)."""
-        # mean wavelenght of bin
-        lc = np.sqrt(self.lmin * self.lmax)
-        # redshift of quasar for which forest is centered in z
-        lrc = np.sqrt(self.survey.lrmin * self.survey.lrmax)
-        zq = (lc / lrc) - 1.0
+
         #if self.verbose>0:
         #    print('mean wave, mean rest wave, z qso =',lc,lrc,zq)
-        
-        # evaluate P1D and P3D for weighting
-        #the range of k values here will be the same as in the analysis.
-        #Calum: these are computed at one specific kt, kp?
-        #Calum: I'll leave it for now, since it's fast to compute p3d/p1d.
-        p3d_w = self._compute_p3d_kms(self.kt_w_deg,self.kp_w_kms)
-        p1d_w = self._compute_p1d_kms(self.kp_w_kms)
 
         # The code below is closer to the method described in the publication,
         # but the c++ code by Pat is more complicated. 
@@ -348,26 +326,17 @@ class Covariance:
         # Pat's code, instead, computes an average over both redshift of 
         # absorption and over quasar redshift.
 
-        # set range of magnitudes used (same as in c++ code)
-        mags = self.survey.maglist
-        # same binning as in c++ code (calum: not sure why necessary?)
-        # dm = 0.025
-        # n_mag_bins = int((mmax-mmin)/dm)
-        # mags = np.linspace(mmin,mmax,n_mag_bins)
-        # get weights(mag) (iteratively)
-        weights = self._compute_weights(p3d_w,p1d_w,zq,lc,mags)
+        weights = self.compute_weights()
 
         # given weights, compute integrals in McDonald & Eisenstein (2007)
-        int_1 = self._compute_int_1(zq,mags,weights)
-        int_2 = self._compute_int_2(zq,mags,weights)
-        int_3 = self._compute_int_3(zq,lc,mags,weights)
+        int_1 = self._compute_int_1(weights)
+        int_2 = self._compute_int_2(weights)
+        int_3 = self._compute_int_3(weights)
 
         # length of forest in km/s
         forest_length = self._get_forest_length()
         # length of pixel in km/s
         pixel_length = self.survey.pix_kms
-        # effective 3D density of pixels
-        self.np_eff = int_1*forest_length / pixel_length
         # Pw2D in McDonald & Eisenstein (2007)
         self._aliasing_weights = int_2 / (int_1 * forest_length)
         # PNeff in McDonald & Eisenstein (2007)
@@ -379,12 +348,8 @@ class Covariance:
             If Pw2D or PN_eff are not passed, it will compute them"""
         # figure out mean redshift of the mini-survey
         z = self._mean_z()
-        # signal
-        p3d = self._compute_p3d_kms(kt_deg,kp_kms)
-        # P1D for aliasing
-        p1d = self._compute_p1d_kms(kp_kms)
         # previously computed p2wd and pn_eff.
-        total_power = p3d + self._aliasing_weights * p1d + self._effecitve_noise_power
+        total_power = self._p3d_w + self._aliasing_weights * self._p1d_w + self._effecitve_noise_power
         return total_power
 
     def compute_3d_power_variance(self,k_hmpc,mu
