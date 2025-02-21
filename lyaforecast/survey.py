@@ -19,6 +19,8 @@ class Survey:
         self.zmin = config['survey'].getfloat('z bin min', 2)
         self.zmax = config['survey'].getfloat('z bin max', 4)
         self.num_z_bins = config['survey'].getint('num z bins', 1)
+        self._zlist = np.linspace(self.zmin, self.zmax, self.num_z_bins+1)
+        self.z_bin_centres = self._zlist[:-1] + np.diff(self._zlist)[0]/2
         # magnitude range and nbins
         self.mag_min = config['survey'].getfloat('min_band_mag',16)
         self.mag_max = config['survey'].getfloat('max_band_mag',23)
@@ -65,35 +67,38 @@ class Survey:
             print("Scaling dndzdmag from a total density (z>={}) of {} to {}/deg2".format(z_min_lya,current_total_density,self.qso_density))
             tdNdmdzddeg2 *= (self.qso_density/current_total_density)
         
-        # This assumes entries are evenly spaced. 
+         # This assumes entries are evenly spaced. 
         dz = z[1] - z[0]
         dm = m[1] - m[0]
-        tdNdmdzddeg2 /= (dz*dm)
+        tdNdmdzddeg2 /= (dz*dm) #check this.
         tdNdmdzddeg2 = np.reshape(tdNdmdzddeg2,[len(z),len(m)])
 
+        #Calum: This previous method makes no sense to me? It returns a negative number when m>mmax
+        #why consider the region mmax to mmax + 0.5 * dm?
         # figure out allowed redshift range (will check out of bounds)
-        zmin = z[0] - 0.5*dz
-        zmax = z[-1] + 0.5*dz
+        self._zmin = z[0] #- 0.5*dz
+        self._zmax = z[-1] #+ 0.5*dz
         # figure out allowed magnitude range (will check out of bounds)
-        mmin = m[0] - 0.5*dm
-        mmax = m[-1] + 0.5*dm
-
+        self._mmin = m[0] #- 0.5*dm
+        self._mmax = m[-1] #+ 0.5*dm
         # create interpolation object
-        self.get_qso_lum_func = RectBivariateSpline(z,m,
-                  tdNdmdzddeg2,bbox=[zmin,zmax,mmin,mmax],
+        self._get_qso_lum_func = RectBivariateSpline(z,m,
+                  tdNdmdzddeg2,bbox=[self._zmin,self._zmax,self._mmin,self._mmax],
                   kx=2,ky=2)
+    
+    # #
+    def get_qso_lum_func(self,x_query, y_query):
+            
+            x_clamped = np.clip(x_query, self._zmin, self._zmax)
+            y_clamped = np.clip(y_query, 17, 22.5)
 
-    def range_z(self):
-        """Return range of quasar redshifts covered by QL"""
-        return self.zmin,self.zmax
+            #clamp points to a minimum/maximum magnitude. It's kind of arbitrary right now.
+            #Otherwise interpolator is a bit shit.
+            points = self._get_qso_lum_func(x_query, y_clamped, grid=False)
 
-    def range_mag(self):
-        """Return range of magnitudes covered by QL"""
-        return self.mmin,self.mmax
+            #points where functions start to decrease to negligible
+            #idx_turn = np.where(points<1e-2)
+            #set all these points to 0.
+            #points[:idx_turn[0][-1]] = 0
 
-    # @property
-    # def get_qso_lum_func(self,zq,mag):
-    #     """Quasar luminosity function, observed units.
-    #        Per unit redshift, unit (observed) magnitude and square degree."""
-        
-    #     return self._get_qso_lum_func(zq,mag)
+            return points

@@ -74,10 +74,6 @@ class Covariance:
             lrc = np.sqrt(self.survey.lrmin * self.survey.lrmax)
             self._zq = (self._lc / lrc) - 1.0
 
-
-
-
-
     def _get_eval_mode(self,config):
         """Mode at which to evaluate power spectrum PS in weighting (PS / PS + PN)"""
         ACCEPTED_OPTIONS =  ['bao','p1d']
@@ -256,11 +252,13 @@ class Covariance:
         # 3D noise power as a function of magnitude
         noise_power = self._compute_noise_power_m(weights)
         # effective 3D density of quasars
-        I1 = self._compute_int_1(weights)
+        int_1 = self._compute_int_1(weights)
+        int_2 = self._compute_int_2(weights)
         # 2D density of lines of sight (units of 1/deg^2)
-        n2D_los = I1 * self._get_forest_length()
+        aliasing = int_2 / (int_1**2 + self._get_forest_length())
+        n2D_los = int_1 * self._get_forest_length()
         # weights include aliasing as signal
-        signal_power = self._p3d_w + self._p1d_w / n2D_los
+        signal_power = self._p3d_w + self._p1d_w * aliasing#/ n2D_los
         weights = signal_power/(signal_power+noise_power)
 
         return weights
@@ -338,7 +336,7 @@ class Covariance:
         # length of pixel in km/s
         pixel_length = self.survey.pix_kms
         # Pw2D in McDonald & Eisenstein (2007)
-        self._aliasing_weights = int_2 / (int_1 * forest_length)
+        self._aliasing_weights = int_2 / (int_1**2 * forest_length)
         # PNeff in McDonald & Eisenstein (2007)
         self._effecitve_noise_power = int_3 * pixel_length / (int_1**2 * forest_length)
 
