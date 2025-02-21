@@ -1,5 +1,6 @@
 .vscode/
 lyaforecast/**/__pycache__/
+lyaforecast/**/__pycache__/*.pyc
 lyaforecast/**/*.pyc
 build/
 *.egg-info/
