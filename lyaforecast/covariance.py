@@ -59,12 +59,26 @@ class Covariance:
         self.lmax = lmax
         #load central redshift/wavelength of bin
         self._get_zq_bin()
-
+        #get pix width in kms
+        self._get_pix_kms()
         #pre-compute power spectra
         self._p3d_w = self._compute_p3d_kms(self.kt_w_deg,self.kp_w_kms)
         self._p1d_w = self._compute_p1d_kms(self.kp_w_kms)
 
+    def _get_pix_kms(self):
+        #get pix width in kms, whether angstrom or kms is provided.
+        z = self._mean_z()
+        #pix width in angstroms
+        pix_ang = self.survey.pix_ang
+        #assume if pix_ang is provided, it will be used. (can add flag later)
+        if pix_ang is not None:
+            self._pix_kms = pix_ang * self.cosmo.velocity_from_wavelength(z)
+        else:
+            self._pix_kms =  self.survey.pix_kms
+            assert self._pix_kms is not None, 'Must provide pix width in kms or ang'      
 
+        breakpoint()  
+        
     def _get_zq_bin(self):
         # given wavelength range covered in bin, compute central redshift and mean wavelength
         if not (self.lmin is None or self.lmax is None):
@@ -89,32 +103,42 @@ class Covariance:
 
     def _mean_z(self):
         """ given wavelength range covered in bin, compute central redshift"""
-        l = np.sqrt(self.lmin*self.lmax)
-        z = l/self.cosmo.LYA_REST-1.0
-        return z
+        return np.sqrt(self.lmin * self.lmax) / self.cosmo.LYA_REST - 1.0
 
     def _get_redshift_depth(self):
         """Depth of redshift bin, in km/s"""
         c_kms = self.cosmo.SPEED_LIGHT
         L_kms = c_kms*np.log(self.lmax/self.lmin)
+
         return L_kms
 
     def _get_forest_length(self):
         """Length of Lya forest, in km/s"""
         c_kms = self.cosmo.SPEED_LIGHT
-        Lq_kms = c_kms*np.log(self.survey.lrmax/self.survey.lrmin)
+        lmax_forest = self.survey.lrmax * (1 + self._zq)
+        lmin_forest = self.survey.lrmin * (1 + self._zq)
+        Lq_kms = c_kms*np.log(lmax_forest/lmin_forest)
+
         return Lq_kms
+    
+    def _get_forest_wave(self):
+        lmax_forest = self.survey.lrmax * (1 + self._zq)
+        lmin_forest = self.survey.lrmin * (1 + self._zq)
+        nbins = int((lmax_forest - lmin_forest) / self.survey.pix_ang)
+        self._forest_wave = np.linspace(lmin_forest,lmax_forest,nbins)
+
 
     def _compute_p1d_kms(self,kp_kms):
         """1D Lya power spectrum in observed coordinates,
             smoothed with pixel width and resolution."""
         z = self._mean_z()
         # get P1D before smoothing
-        P1D_kms = self.power_spec.compute_p1d_palanque2013(z,kp_kms)
+        p1d_kms = self.power_spec.compute_p1d_palanque2013(z,kp_kms)
         # smoothing (pixelization and resolution)
-        kernel = self.spectrograph.smooth_kernel_kms(self.survey.pix_kms,self.survey.res_kms,kp_kms)
-        P1D_kms *= (kernel**2)
-        return P1D_kms
+        kernel = self.spectrograph.smooth_kernel_kms(self._pix_kms,self.survey.res_kms,kp_kms)
+        p1d_kms *= (kernel**2)
+
+        return p1d_kms
 
     def _compute_p3d_kms(self,kt_deg,kp_kms):
         """3D Lya power spectrum in observed coordinates. 
@@ -138,7 +162,7 @@ class Covariance:
         # convert power to observed units
         p3d_degkms = p3d_hmpc * dkms_dhmpc / dhmpc_ddeg**2
         # smoothing (pixelization and resolution)
-        kernel=self.spectrograph.smooth_kernel_kms(self.survey.pix_kms,self.survey.res_kms,kp_kms)
+        kernel=self.spectrograph.smooth_kernel_kms(self._pix_kms,self.survey.res_kms,kp_kms)
         p3d_degkms *= kernel**2
 
         return p3d_degkms
@@ -212,16 +236,18 @@ class Covariance:
         # get effective density of quasars
         int_1 = self._compute_int_1(weights)
         # number of pixels in a forest
-        num_pix = self._get_forest_length() / self.survey.pix_kms
+        num_pix = self._get_forest_length() / self._pix_kms
         np_eff = int_1 * num_pix
 
         return np_eff
 
     def _get_var_m(self):
         """Noise pixel variance as a function of magnitude (dimensionless)"""
-        z = (self._lc / self.cosmo.LYA_REST) - 1
-        # pixel width in Angstroms
-        pix_ang = self.survey.pix_kms / self.cosmo.velocity_from_wavelength(z)
+
+        z = self._mean_z()
+        #pixel width in angstroms
+        pix_ang = self._pix_kms / self.cosmo.velocity_from_wavelength(z)
+
         # noise rms per pixel
         noise_rms = np.zeros_like(self.survey.maglist)
         for i,m in enumerate(self.survey.maglist):
@@ -245,7 +271,7 @@ class Covariance:
 
         return noise_power
 
-    def _weights1(self,weights):
+    def _compute_weights(self,weights):
         """Compute new weights as a function of magnitude, using P3D.
             This version of computing the weights is closer to the one
             described in McDonald & Eisenstein (2007)."""
@@ -255,16 +281,15 @@ class Covariance:
         int_1 = self._compute_int_1(weights)
         int_2 = self._compute_int_2(weights)
         # 2D density of lines of sight (units of 1/deg^2)
-        aliasing = int_2 / (int_1**2 + self._get_forest_length())
-        n2D_los = int_1 * self._get_forest_length()
+        aliasing = int_2 / (int_1**2 * self._get_forest_length())
         # weights include aliasing as signal
-        signal_power = self._p3d_w + self._p1d_w * aliasing#/ n2D_los
-        weights = signal_power/(signal_power+noise_power)
+        signal_power = self._p3d_w + self._p1d_w * aliasing
+        weights = signal_power / (signal_power + noise_power)
 
         return weights
 
     #if this is the same why not just use this as default?
-    def _weights2(self,weights):
+    def _compute_weights2(self,weights):
         """Compute new weights as a function of magnitude, using pixel var.
             This version of computing the weights is closer to the c++ code
             developed by Pat McDonald and used in official forecasts of DESI.
@@ -272,7 +297,7 @@ class Covariance:
         # noise pixel variance as a function of magnitude (dimensionless)
         noise_var = self._get_var_m()
         # pixel variance from P1D (dimensionless)
-        pix_var_1d = self._p1d_w / self.survey.pix_kms
+        pix_var_1d = self._p1d_w / self._pix_kms
         # effective 3D density of pixels
         neff = self.get_np_eff(weights)
         # pixel variance from P3D (dimensionless)
@@ -289,7 +314,7 @@ class Covariance:
         # noise pixel variance as a function of magnitude (dimensionless)
         noise_var = self._get_var_m()
         # pixel variance from P1D (dimensionless)
-        pix_var_1d = self._p1d_w / self.survey.pix_kms
+        pix_var_1d = self._p1d_w / self._pix_kms
         weights = pix_var_1d / (pix_var_1d + noise_var)
 
         return weights
@@ -304,7 +329,7 @@ class Covariance:
         for i in range(num_iter):
             if self.verbose > 1:
                 print(i,'<w>',np.mean(weights))
-            weights = self._weights1(weights)
+            weights = self._compute_weights(weights)
             #weights = self.Weights2(weights)
 
         return weights
@@ -334,20 +359,19 @@ class Covariance:
         # length of forest in km/s
         forest_length = self._get_forest_length()
         # length of pixel in km/s
-        pixel_length = self.survey.pix_kms
+        pixel_length = self._pix_kms
         # Pw2D in McDonald & Eisenstein (2007)
         self._aliasing_weights = int_2 / (int_1**2 * forest_length)
         # PNeff in McDonald & Eisenstein (2007)
-        self._effecitve_noise_power = int_3 * pixel_length / (int_1**2 * forest_length)
+        self._effective_noise_power = int_3 * pixel_length / (int_1**2 * forest_length)
 
-
-    def _compute_total_3d_power(self,kt_deg,kp_kms):
+    def _compute_total_3d_power(self):
         """Sum of 3D Lya power, aliasing and effective noise power. 
             If Pw2D or PN_eff are not passed, it will compute them"""
         # figure out mean redshift of the mini-survey
         z = self._mean_z()
         # previously computed p2wd and pn_eff.
-        total_power = self._p3d_w + self._aliasing_weights * self._p1d_w + self._effecitve_noise_power
+        total_power = self._p3d_w + self._aliasing_weights * self._p1d_w + self._effective_noise_power
         return total_power
 
     def compute_3d_power_variance(self,k_hmpc,mu
@@ -372,7 +396,7 @@ class Covariance:
 
         # get total power in units of observed coordinates 
         # To-do: get P_total(mag)
-        total_power_degkms = self._compute_total_3d_power(kt_deg,kp_kms)
+        total_power_degkms = self._compute_total_3d_power()
         # convert into units of (Mpc/h)^3
         total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dhmpc
         # survey volume in units of (Mpc/h)^3
@@ -390,6 +414,9 @@ class Covariance:
 
         return power_variance
     
+    def compute_qso_auto_power(self):
+        return
+    
     def compute_cross_power_variance(self,k_hmpc,mu
                         ):
         """Variance of Lya-QSO cross-power, in units of (Mpc/h)^3.
@@ -397,37 +424,5 @@ class Covariance:
             Note that here -1 < mu < 1.
            """
         
-        #We should move to computing this in a vectorised fashion, rather than 
-        #iterating over mu/k values. Then I wouldn't have to call the mu/k values
-        # again.
-        z = self._mean_z()
-
-        # decompose into line of sight and transverse components
-        kp_hmpc = k_hmpc * mu
-        kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
-        # transform from comoving to observed coordinates
-        dkms_dhmpc = self.cosmo.velocity_from_distance(z)
-        kp_kms = kp_hmpc / dkms_dhmpc
-        dhmpc_ddeg = self.cosmo.distance_from_degrees(z)
-        kt_deg = kt_hmpc * dhmpc_ddeg
-
-        # get total power in units of observed coordinates 
-        # To-do: get P_total(mag)
-        total_power_degkms = self._compute_total_3d_power(kt_deg,kp_kms)
-        # convert into units of (Mpc/h)^3
-        total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dhmpc
-        # survey volume in units of (Mpc/h)^3
-        volume_degkms = self.survey.area_deg2 * self._get_redshift_depth()
-        volume_hmpc = volume_degkms * dhmpc_ddeg**2 / dkms_dhmpc
-        # based on Eq 8 in Seo & Eisenstein (2003), but note that here we
-        # use 0 < mu < 1 and they used -1 < mu < 1
-        num_modes = volume_hmpc * k_hmpc**2 * self._dk * self._dmu / 2 * np.pi**2
-        power_variance = 2 * total_power_hmpc**2 / num_modes
-
-        #If not per magnitude, return power var for mmax only. 
-        # Otherwise as a function of m input.
-        if not self.per_mag:
-            power_variance = power_variance[-1]
-
-        return power_variance
+        return 
 

@@ -250,7 +250,7 @@ class Forecast:
                 # dlog(k)/dat    = (1-mu2)
                 # dmodel/dap     = dmodel/dlog(k)*dlog(k)/dap    = dmodeldlk * mu2
                 # dmodel/dat     = dmodel/dlog(k)*dlog(k)/dat    = dmodeldlk * (1-mu2)
-                h = [mu**2,(1 - mu**2)]
+                h = [mu**2,1 - mu**2]
                 if self.covariance.per_mag:
                     fisher_matrix += np.outer(h,h)[:,:,None] * np.sum(dmodel_dlk**2 / p3d_variance.T, axis=1).T
                 else:

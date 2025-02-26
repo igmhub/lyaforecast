@@ -1,8 +1,9 @@
 import numpy as np
 
-class McDonald2003:
+class AnalyticBias:
     """Class to store analytic formulae for biases of Lya P3D, including non-linear corrections.
         These will later be handled by ForestFlow, currently parameter values are out-of-date."""
+    POWER_OPTIONS = ['lya','qso','lyaqso']
 
     def _get_non_linear_corr(self,k_hMpc):
         """Non-linear correction"""
@@ -26,48 +27,62 @@ class McDonald2003:
         kv = k_v0 * pow(1 + k_hMpc / k_vv, alpha_vv)
         return pow(kpar/kv, alpha_v)
     
-    def _get_density_bias(self,z):
+    def _get_density_bias(self,z,which):
         """Linear density bias as a function of redshift, 
             values from DESI Collaboration et al., 2024b"""
         #alpha=1.25
-        alpha = 2.9
-        bias_zref = -0.1078
-        zref = 2.33
+        if which=='lya':
+            alpha = 2.9
+            bias_zref = -0.1078
+            zref = 2.33
+        elif which=='qso':
+            alpha = 2.9
+            bias_zref = -0.1078
+            zref = 2.33
+        else:
+            raise ValueError(f'invalid biasing: {which}, select from: {self.POWER_OPTIONS}')
+        
         return bias_zref * ((1 + z)/(1 + zref))**alpha
 
-    def _get_beta_rsd(self,z):
+    def _get_beta_rsd(self,z,which):
         """Linear RSD anisotropy parameter as a function of redshift,
         values from DESI Collaboration et al., 2024b"""
-        alpha = 0.0
-        beta_zref = 1.743
-        zref = 2.33
+        if which=='lya':
+            alpha = 0.0
+            beta_zref = 1.743
+            zref = 2.33
+        else:
+            raise ValueError(f'invalid biasing: {which}, select from: {self.POWER_OPTIONS}')
+        
         return beta_zref*((1 + z)/(1 + zref))**alpha
 
-    def _small_scale_correction(self,k_hmpc,mu):
+    def _small_scale_correction(self,k_hmpc,mu,which):
         """Analytic formula for small-scales correction to Lyman alpha P3D(z,k,mu) 
             from McDonald (2003). 
-            Values computed at z=2.25, it would be great to have z-evolution.
+            Values computed at z=2.33, it would be great to have z-evolution.
             Values are cosmology dependent, but we ignore it here.
             Wavenumbers in h/Mpc. """
-        # this will go in the exponent
-        texp = (self._get_non_linear_corr(k_hmpc) 
+        if which=='lya':
+            texp = (self._get_non_linear_corr(k_hmpc) 
                 - self._get_pressure_corr(k_hmpc)
                 - self._get_non_linear_velo(k_hmpc,mu))
-        
-        return np.exp(texp)
+            return np.exp(texp)
+        else:
+            return 1
 
-    def compute_bias(self,z,k_hmpc,mu,linear=True):
-        """Analytic formula for scale-dependent bias of Lyman alpha P3D(z,k,mu) 
-            from McDonald (2003), including Kaiser and small scale correction.  
+    def compute_bias(self,z,k_hmpc,mu,linear=True,which='lya'):
+        """Analytic formula for scale-dependent bias of Lyman alpha P3D(z,k,mu),
+             including Kaiser and small scale correction.  
             Basically, it retursn P_F(k,mu) / P_lin(k,mu)
-            Values computed at z=2.25, it would be great to have z-evolution.
+            Values computed at z=2.33, it would be great to have z-evolution.
             Values are cosmology dependent, but we ignore it here.
             If linear=True, return only Kaiser.
             Wavenumbers in h/Mpc. """
-        b_delta = self._get_density_bias(z)
-        beta = self._get_beta_rsd(z)
+
+        b_delta = self._get_density_bias(z,which)
+        beta = self._get_beta_rsd(z,which)
         kaiser = (b_delta * (1+ beta * mu**2))**2
         if linear:
             return kaiser
         else:
-            return kaiser * self._small_scale_correction(k_hmpc,mu)
+            return kaiser * self._small_scale_correction(k_hmpc,mu,which)

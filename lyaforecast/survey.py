@@ -29,6 +29,9 @@ class Survey:
         # pixel width and resolution in km/s (for now)
         self.pix_kms = config['survey'].getfloat('pix_width_kms')
         self.res_kms = np.array(config['survey'].get('pix_res_kms').split()).astype('float')[0]
+        #in angstrom
+        self.pix_ang = config['survey'].getfloat('pix_width_ang')
+        self.res_ang = config['survey'].getfloat('pix_res_ang')
         # definition of forest (lrmin,lrmax)
         self.lrmin = config['survey'].getfloat('min_rest_frame_lya')
         self.lrmax = config['survey'].getfloat('max_rest_frame_lya')
