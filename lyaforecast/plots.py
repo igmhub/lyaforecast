@@ -151,41 +151,62 @@ class Plots:
 
     def plot_qso_lf(self):
         with self._make_style()[0], self._make_style()[1]: 
-            fig,ax = plt.subplots(1,1,figsize=(10,6))
+            fig,ax = plt.subplots(1,2,figsize=(15,6))
             
             # get limits, for now fix this
             m = np.linspace(0,24,100)
+            z = np.linspace(2,4,20)
             qlf = self.survey.get_qso_lum_func
             # plot QL at different z
-            ax.plot(m,qlf(2.0,m),label='z=2.0')
-            ax.plot(m,qlf(2.5,m),label='z=2.5')
-            ax.plot(m,qlf(3.0,m),label='z=3.0')
-            ax.plot(m,qlf(3.5,m),label='z=3.5')
-            #breakpoint()
-            # ax.plot(m,qlf(4.0,m),label='z=4.0')
+            ax[0].plot(m,qlf(2.0,m),label='z=2.0')
+            ax[0].plot(m,qlf(2.5,m),label='z=2.5')
+            ax[0].plot(m,qlf(3.0,m),label='z=3.0')
+            ax[0].plot(m,qlf(3.5,m),label='z=3.5')
 
-            ax.legend(loc=2,fontsize=15)
-            #ax.set_ylim(1e-2,1e2)
-            #plt.xlim(mmin,mmax)
-            ax.set_yscale('log')
-            ax.set_xlabel('r mag',fontsize=15)
-            ax.set_ylabel(r'dN / dz / dmag / $\rm{ddeg}^2$',fontsize=15)
-            ax.grid()
+            ax[0].legend(loc=2,fontsize=15)
+            ax[0].set_yscale('log')
+            ax[0].set_xlim(18,22)
+            ax[0].set_xlabel('r mag',fontsize=15)
+            ax[0].set_ylabel(r'dN/dzdm$\rm{ddeg}^2$',fontsize=15)
+            ax[0].grid()
             
+            #dn_dzddeg vs z
+            qlf_dzddeg = np.zeros(z.size)
+            for k,zi in enumerate(z):
+                qlf_dzddeg_i = np.sum(qlf(zi,m) * (m[1] - m[0]))
+                qlf_dzddeg[k] = qlf_dzddeg_i
+
+            ax[1].plot(z,qlf_dzddeg,label=r'$r_{\rm max}=23$')
+
+            desi_sci_z = [1.96,2.12,2.28,2.43,2.59,2.75,2.91,
+                          3.07,3.23,3.39,3.55,3.70,3.86,4.02]
+            desi_sci_points = [82,69,53,43,37,31,26,21,16,13,9,7,5,3]
+
+            ax[1].scatter(desi_sci_z,desi_sci_points,color='black',
+                       marker='x',alpha=0.5,label=r'DESI sci')
+        
+            ax[1].set_xlabel('z',fontsize=15)
+            ax[1].set_ylabel(r'dN/dz$\rm{ddeg}^2$',fontsize=15)
+            ax[1].grid()
+            ax[1].legend()
+
             self.fig = fig
 
     def plot_neff(self,neff):
         with self._make_style()[0], self._make_style()[1]: 
-            fig,ax = plt.subplots(1,1,figsize=(10,6))
+            fig,ax = plt.subplots(1,2,figsize=(15,6))
             for i,zbc in enumerate(self.survey.z_bin_centres):
-                ax.plot(self.survey.maglist,neff[i],label=f'z={zbc}')
+                ax[0].plot(self.survey.maglist,neff[i],label=f'z={zbc}')
 
-            ax.legend(loc=2,fontsize=15)
-            #plt.xlim(mmin,mmax)
-            ax.set_xlabel(r'$r_{\rm max}$',fontsize=15)
-            ax.set_ylabel(r'$\overline{N}_{\rm eff}[\rm Mpc^{-2}]$',fontsize=15)
-            ax.set_yscale('linear')
+            ax[0].legend(loc=2,fontsize=15)
+            ax[0].set_xlim(21,23)
+            ax[0].set_xlabel(r'$r_{\rm max}$',fontsize=15)
+            ax[0].set_ylabel(r'$\overline{n}_{\rm eff}[\rm (km/s)^{-3}]$',fontsize=15)
+            ax[0].set_yscale('linear')
             
+            ax[1].plot(self.survey.z_bin_centres,neff[:,-1])
+            ax[1].set_xlabel(r'$z$',fontsize=15)
+
             self.fig = fig
 
     def plot_weights(self,weights):

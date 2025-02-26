@@ -160,9 +160,6 @@ class Spectrograph:
         print("Nexp in file             =", self._file_num_exp)
         print("Redshifts                =", self._zq)
         print("Magnitudes               =", self._magnitudes)
-        
-
-
 
     def range_zq(self):
         """Return range of quasar redshifts from file"""
@@ -186,19 +183,21 @@ class Spectrograph:
         large_noise=1e10  
         if rmag > self._magnitudes[-1]: 
             print('WARNING: extrapolating beyond stored magnitude information')
-        #     print(f'mag {rmag} too faint, returning large noise')
-        #     return large_noise        
+            #print(f'mag {rmag} too faint, returning large noise')
+            #return large_noise        
         if zq > self._zq[-1] or zq < self._zq[0]: 
             print(f'zqso {zq} out of range, returning large noise')
             return large_noise
-        if lam_obs > self._lambda_obs_m[-1] or lam_obs < self._lambda_obs_m[0]: 
-            print(f'lambda obs: {lam_obs} out of range, returning large noise')
+        
+        if (self._lambda_obs_m[-1] < lam_obs) or (lam_obs < self._lambda_obs_m[0]):
+            print('Forest wavelength out of bounds, returning large noise')
             return large_noise
+
 
         # if brighter than minimum magnitude, use minimum
         # (c++ code does extrapolation, not clear what is better)
         trmag = np.fmax(rmag, self._magnitudes[0])
- 
+
         # DESI file returns S/N per Angstrom, per file_num_exp exposures
         snr_per_ang = self._snr_interp([trmag,zq,lam_obs])
         # scale with pixel width
@@ -207,6 +206,7 @@ class Spectrograph:
         snr = snr_per_exp * np.sqrt(num_exp / self._file_num_exp)
         # prevent division by zero
         snr = np.fmax(snr,1 / large_noise)
+
         return 1 / snr
 
     def smooth_kernel_kms(self,pix_kms,res_kms,k_kms):

@@ -1,5 +1,5 @@
 import numpy as np
-from lyaforecast.analytic_bias_McD2003 import McDonald2003
+from lyaforecast.analystic_biases import AnalyticBias
 
 class PowerSpectrum:
     """Class to store power spectra models.
@@ -12,7 +12,7 @@ class PowerSpectrum:
         self.cosmo = cosmo
         #isotropic linear matter power
         #self.linear_power = cosmo.get_pk_lin_interp(self.kmin,self.kmax,1000)
-        self.mcd03 = McDonald2003()
+        self.bias = AnalyticBias()
 
     def compute_linear_power_evol(self,z,k_hmpc,k_min,k_max):
         """Scale linear power, assuming EdS scale with redshift"""
@@ -24,7 +24,8 @@ class PowerSpectrum:
         eds = ((1+self.cosmo.z_ref)/(1+z))**2
         return pk_zref * eds
 
-    def compute_p3d_hmpc(self,z,k_hmpc,mu,k_min,k_max,linear=False):
+    def compute_p3d_hmpc(self,z,k_hmpc,mu,k_min,k_max,
+                         linear=False,which='lya'):
         """3D power spectrum P_F(z,k,mu). 
         If linear=True, it will ignore small scale correction."""
         # get linear power at zrefs
@@ -33,7 +34,7 @@ class PowerSpectrum:
         # compute redshift-evolved linear matter power spectrum
         pk_zref = self.compute_linear_power_evol(z,k_hmpc,k_min,k_max)
         # get flux scale-dependent biasing (or only linear term)
-        b = self.mcd03.compute_bias(z,k,mu,linear)
+        b = self.bias.compute_bias(z,k,mu,linear,which)
 
         return pk_zref * b
 
