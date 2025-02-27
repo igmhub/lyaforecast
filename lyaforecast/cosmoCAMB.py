@@ -42,7 +42,8 @@ class CosmoCamb:
 
     def velocity_from_distance(self,z):
         """Conversion factor from Mpc/h to km/s, at redshift z."""
-        return self.results.hubble_parameter(z) / self._pars.H0 / (1 + z) * 100.0
+        breakpoint()
+        return (self.results.hubble_parameter(z) / self._pars.H0 / (1 + z)) * 100.0
 
     def velocity_from_wavelength(self,z):
         """Conversion factor from lambda_obs to km/s, at redshift z."""

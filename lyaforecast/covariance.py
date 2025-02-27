@@ -61,12 +61,14 @@ class Covariance:
         self._get_zq_bin()
         #get pix width in kms
         self._get_pix_kms()
+        #get resolution in kms (for mean wavelength)
+        self._get_res_kms()
         #pre-compute power spectra
         self._p3d_w = self._compute_p3d_kms(self.kt_w_deg,self.kp_w_kms)
         self._p1d_w = self._compute_p1d_kms(self.kp_w_kms)
 
     def _get_pix_kms(self):
-        #get pix width in kms, whether angstrom or kms is provided.
+        #get pix width in kms, whether angstrom or km/s is provided.
         z = self._mean_z()
         #pix width in angstroms
         pix_ang = self.survey.pix_ang
@@ -77,7 +79,16 @@ class Covariance:
             self._pix_kms =  self.survey.pix_kms
             assert self._pix_kms is not None, 'Must provide pix width in kms or ang'      
 
-        breakpoint()  
+    def _get_res_kms(self):
+        #get spectrograph reslution in km/s
+        #mean redshift
+        z = self._mean_z()
+        #assume specifying resolution in km/s takes precedence
+        if self.survey.res_kms is not None:
+            self._res_kms = self.survey.res_kms
+        else:
+            res_ang = self._lc / self.survey.resolution
+            self._res_kms = res_ang * self.cosmo.velocity_from_wavelength(z)
         
     def _get_zq_bin(self):
         # given wavelength range covered in bin, compute central redshift and mean wavelength
@@ -135,7 +146,7 @@ class Covariance:
         # get P1D before smoothing
         p1d_kms = self.power_spec.compute_p1d_palanque2013(z,kp_kms)
         # smoothing (pixelization and resolution)
-        kernel = self.spectrograph.smooth_kernel_kms(self._pix_kms,self.survey.res_kms,kp_kms)
+        kernel = self.spectrograph.smooth_kernel_kms(self._pix_kms,self._res_kms,kp_kms)
         p1d_kms *= (kernel**2)
 
         return p1d_kms
@@ -161,8 +172,10 @@ class Covariance:
                                                   self._linear)
         # convert power to observed units
         p3d_degkms = p3d_hmpc * dkms_dhmpc / dhmpc_ddeg**2
+        # convert resolution to kms
+
         # smoothing (pixelization and resolution)
-        kernel=self.spectrograph.smooth_kernel_kms(self._pix_kms,self.survey.res_kms,kp_kms)
+        kernel=self.spectrograph.smooth_kernel_kms(self._pix_kms,self._res_kms,kp_kms)
         p3d_degkms *= kernel**2
 
         return p3d_degkms
@@ -372,6 +385,7 @@ class Covariance:
         z = self._mean_z()
         # previously computed p2wd and pn_eff.
         total_power = self._p3d_w + self._aliasing_weights * self._p1d_w + self._effective_noise_power
+
         return total_power
 
     def compute_3d_power_variance(self,k_hmpc,mu
@@ -404,7 +418,7 @@ class Covariance:
         volume_hmpc = volume_degkms * dhmpc_ddeg**2 / dkms_dhmpc
         # based on Eq 8 in Seo & Eisenstein (2003), but note that here we
         # use 0 < mu < 1 and they used -1 < mu < 1
-        num_modes = volume_hmpc * k_hmpc**2 * self._dk * self.dmu / 2 * np.pi**2
+        num_modes = volume_hmpc * k_hmpc**2 * self._dk * self.dmu / 4 * np.pi**2
         power_variance = 2 * total_power_hmpc**2 / num_modes
 
         #If not per magnitude, return power var for mmax only. 

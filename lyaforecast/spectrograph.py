@@ -184,7 +184,7 @@ class Spectrograph:
         if rmag > self._magnitudes[-1]: 
             print('WARNING: extrapolating beyond stored magnitude information')
             #print(f'mag {rmag} too faint, returning large noise')
-            #return large_noise        
+            return large_noise        
         if zq > self._zq[-1] or zq < self._zq[0]: 
             print(f'zqso {zq} out of range, returning large noise')
             return large_noise
@@ -214,6 +214,7 @@ class Spectrograph:
             including both pixelization and resolution"""
         # pixelization
         x = np.fmax(0.5 * k_kms * pix_kms, 1.e-10)
+        x = 0.5 * k_kms * pix_kms
         pixel_kernel = np.sin(x) / x
         gauss_kernel = np.exp(-0.5 * k_kms**2 * res_kms**2)
         return pixel_kernel * gauss_kernel

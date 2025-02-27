@@ -190,6 +190,7 @@ class Forecast:
 
                 p3d_variance = np.array([self.covariance.compute_3d_power_variance(k,mu) 
                                     for k in self.covariance.k]) # (Mpc/h)**6
+
                 #not making a great approximation here.
                 if i==0:
                     self.plots.p3d[str(z_bin_centre)] = p3d * self.covariance.dmu

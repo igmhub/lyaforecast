@@ -28,10 +28,10 @@ class Survey:
         self.maglist = np.linspace(self.mag_min,self.mag_max,self.num_mag_bins)
         # pixel width and resolution in km/s (for now)
         self.pix_kms = config['survey'].getfloat('pix_width_kms')
-        self.res_kms = np.array(config['survey'].get('pix_res_kms').split()).astype('float')[0]
+        self.res_kms = config['survey'].getfloat('pix_res_kms',None)
         #in angstrom
-        self.pix_ang = config['survey'].getfloat('pix_width_ang')
-        self.res_ang = config['survey'].getfloat('pix_res_ang')
+        self.pix_ang = config['survey'].getfloat('pix_width_ang',None)
+        self.resolution = config['survey'].getfloat('resolution',None)
         # definition of forest (lrmin,lrmax)
         self.lrmin = config['survey'].getfloat('min_rest_frame_lya')
         self.lrmax = config['survey'].getfloat('max_rest_frame_lya')
@@ -92,16 +92,15 @@ class Survey:
     # #
     def get_qso_lum_func(self,x_query, y_query):
             
-            x_clamped = np.clip(x_query, self._zmin, self._zmax)
-            y_clamped = np.clip(y_query, 17, 22.5)
+            # x_clamped = np.clip(x_query, self._zmin, self._zmax)
+            # y_clamped = np.clip(y_query, 17, 23)
 
             #clamp points to a minimum/maximum magnitude. It's kind of arbitrary right now.
             #Otherwise interpolator is a bit shit.
-            points = self._get_qso_lum_func(x_query, y_clamped, grid=False)
-
-            #points where functions start to decrease to negligible
-            #idx_turn = np.where(points<1e-2)
-            #set all these points to 0.
-            #points[:idx_turn[0][-1]] = 0
+            out_of_bounds_mu = np.where(y_query > 23)
+            out_of_bounds_ml = np.where(y_query < 17)
+            points = self._get_qso_lum_func(x_query, y_query, grid=False)
+            points[out_of_bounds_mu] = 1e-20
+            points[out_of_bounds_ml] = 1e-20
 
             return points

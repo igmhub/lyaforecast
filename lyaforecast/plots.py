@@ -154,7 +154,7 @@ class Plots:
             fig,ax = plt.subplots(1,2,figsize=(15,6))
             
             # get limits, for now fix this
-            m = np.linspace(0,24,100)
+            m = np.linspace(0,23,100)
             z = np.linspace(2,4,20)
             qlf = self.survey.get_qso_lum_func
             # plot QL at different z
@@ -165,7 +165,8 @@ class Plots:
 
             ax[0].legend(loc=2,fontsize=15)
             ax[0].set_yscale('log')
-            ax[0].set_xlim(18,22)
+            ax[0].set_xlim(18,23)
+            ax[0].set_ylim(1e-3,)
             ax[0].set_xlabel('r mag',fontsize=15)
             ax[0].set_ylabel(r'dN/dzdm$\rm{ddeg}^2$',fontsize=15)
             ax[0].grid()
