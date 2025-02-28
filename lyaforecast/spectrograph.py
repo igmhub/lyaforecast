@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
+from scipy.ndimage import gaussian_filter1d
 from lyaforecast.utils import get_dir, get_file, check_file
 import sys
 
@@ -89,6 +90,11 @@ class Spectrograph:
 
                 self._snr_mat = np.zeros((num_m,num_z,num_wave))
             self._snr_mat[i,:,:] = pixel_snr_mag.T
+            
+        #smooth rather noisy matrix
+        sigma_smooth = 100
+        self._snr_mat = gaussian_filter1d(self._snr_mat,sigma_smooth,axis=2)
+            
 
         # setup interpolator
         self._snr_interp = RegularGridInterpolator((self._magnitudes,self._zq,self._lambda_obs_m),self._snr_mat,bounds_error=False, fill_value=None)
@@ -201,7 +207,7 @@ class Spectrograph:
         # DESI file returns S/N per Angstrom, per file_num_exp exposures
         snr_per_ang = self._snr_interp([trmag,zq,lam_obs])
         # scale with pixel width
-        snr_per_exp = snr_per_ang * np.sqrt(pix_width)
+        snr_per_exp = snr_per_ang / np.sqrt(pix_width)
         # scale with number of exposures
         snr = snr_per_exp * np.sqrt(num_exp / self._file_num_exp)
         # prevent division by zero
@@ -218,3 +224,6 @@ class Spectrograph:
         pixel_kernel = np.sin(x) / x
         gauss_kernel = np.exp(-0.5 * k_kms**2 * res_kms**2)
         return pixel_kernel * gauss_kernel
+    
+    def get_snr_per_ang(self,mag,zq,lam):
+        return self._snr_interp([mag,zq,lam])

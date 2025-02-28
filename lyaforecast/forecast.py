@@ -55,7 +55,6 @@ class Forecast:
         self.covariance = Covariance(self.config, self.cosmo, self.survey, 
                                      self.spectrograph, self.power_spec)
         
-        self.plots = Plots(self.config,self.survey)
         init_end_time = time.time()
         print(f"Forecast initialized in {init_end_time - init_start_time:.4f} seconds.")
 
@@ -92,6 +91,52 @@ class Forecast:
             neff[i] = self.covariance.get_np_eff(wz)
 
         return neff
+    
+
+    def compute_survey_volume(self):
+        """Compute survey volume (mpc/h) as a function 
+          of redshift."""
+        
+        print('Computing survey volume...')
+        survey_vol = np.zeros(self.survey.num_z_bins)
+        use_z_bin_list = False
+        if self.config['survey'].get('z bin centres',None) is not None:
+            z_bin_centres = self.config['survey'].get('z bin centres')
+            z_bin_centres = np.array(z_bin_centres.split(",")).astype(float)
+            dz = np.zeros(z_bin_centres.size)
+            dz[1:-1] = (z_bin_centres[2:]-z_bin_centres[:-2])/2.
+            dz[0]   = z_bin_centres[1]-z_bin_centres[0]
+            dz[-1]  = z_bin_centres[-1]-z_bin_centres[-2]
+            len_zz = len(z_bin_centres)
+            use_z_bin_list = True
+        else:
+            zz = np.linspace(self.survey.zmin, self.survey.zmax,
+                          self.survey.num_z_bins+1)
+            z_bin_centres = np.zeros(self.survey.num_z_bins)
+            len_zz = len(zz) - 1
+
+        for iz in range(len_zz):
+            #limits of individual redshift bins
+            if use_z_bin_list:
+                z1=z_bin_centres[iz]-dz[iz]/2
+                z2=z_bin_centres[iz]+dz[iz]/2
+                z_bin_centre = z_bin_centres[iz]
+            else:
+                z1=zz[iz]
+                z2=zz[iz+1]
+                z_bin_centre = z1 + (z2-z1)/2
+                z_bin_centres[iz] = z_bin_centre
+
+            print(f"z bin = [{z1}-{z2}], bin centre = {z_bin_centre}")
+            
+            lmin = self.cosmo.LYA_REST*(1+z1)
+            lmax = self.cosmo.LYA_REST*(1+z2)
+
+            self.covariance(lmin,lmax)
+
+            survey_vol[iz] = self.covariance.get_survey_volume()
+
+        return survey_vol,z_bin_centres
 
     def run_bao_forecast(self):
         print('Running BAO forecast')
@@ -132,6 +177,10 @@ class Forecast:
         #    for resolution in resolutions:
         #        for density in densities:
         #    
+
+        p3d_z = {}
+        p3d_var_z = {}
+
         for iz in range(len_zz):
             #limits of individual redshift bins
             if use_z_bin_list:
@@ -174,7 +223,6 @@ class Forecast:
             # the polynomial coefficients so no marginalization is needed)
             
             #vectorise power_spec computations.
-            
             #empty array for fisher information
             #if per magnitude add extra dimension
             #will expand for SNR too.
@@ -191,13 +239,13 @@ class Forecast:
                 p3d_variance = np.array([self.covariance.compute_3d_power_variance(k,mu) 
                                     for k in self.covariance.k]) # (Mpc/h)**6
 
-                #not making a great approximation here.
+                # #not making a great approximation here.
                 if i==0:
-                    self.plots.p3d[str(z_bin_centre)] = p3d * self.covariance.dmu
-                    self.plots.var_p3d[str(z_bin_centre)] = (1/self.covariance.mu.size)**2 * p3d_variance
+                    p3d_z[str(z_bin_centre)] = p3d * self.covariance.dmu
+                    p3d_var_z[str(z_bin_centre)] = (1/self.covariance.mu.size)**2 * p3d_variance
                 else:
-                    self.plots.p3d[str(z_bin_centre)] += p3d * self.covariance.dmu
-                    self.plots.var_p3d[str(z_bin_centre)] += (1/self.covariance.mu.size)**2  * p3d_variance             
+                    p3d_z[str(z_bin_centre)] += p3d * self.covariance.dmu
+                    p3d_var_z[str(z_bin_centre)] += (1/self.covariance.mu.size)**2  * p3d_variance             
 
                 # compute a smooth version of p3d
                 # not sure how to do much better than a polynomial fit
@@ -302,24 +350,26 @@ class Forecast:
         data['at_err_m'] = sigma_log_da_combined_m
         data['ap_err_z'] = sigma_log_dh
         data['at_err_z'] = sigma_log_da
-        
-        #load data to plots instance
-        self.plots(self.covariance,data)
+        data['p3d_z'] = p3d_z
+        data['p3d_var_z'] = p3d_var_z
 
-        if self.plots.plot_bao:
+        #load data to plots instance
+        self.plots = Plots(survey=self.survey,covariance=self.covariance,data=data)
+
+        if self.config['control'].getboolean('plot bao'):
             if self.covariance.per_mag:
                 self.plots.plot_da_h_m()
                 self.plots.fig.savefig(self.out_folder.joinpath('dap_dat_dm.png'))
             else:
                 self.plots.plot_da_h_z()
                 self.plots.fig.savefig(self.out_folder.joinpath('dap_dat_z.png'))
-        if self.plots.plot_p3d:
+        if self.config['control'].getboolean('plot p3d'):
             if not self.covariance.per_mag:
                 self.plots.plot_p3d_z()
                 self.plots.fig.savefig(self.out_folder.joinpath('pk_z.png'))
             else:
                 print('plot p3d requires per_mag = False')
-        if self.plots.plot_p3d_var:
+        if self.config['control'].getboolean('plot p3d var'):
             if not self.covariance.per_mag:
                 self.plots.plot_var_p3d_z()
                 self.plots.fig.savefig(self.out_folder.joinpath('var_pk_z.png'))
@@ -329,7 +379,6 @@ class Forecast:
 
         
     def get_cosmo_params(self):
-        
         pass
 
 

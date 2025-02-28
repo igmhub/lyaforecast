@@ -1,47 +1,33 @@
 """Plot power spectra and parameter error bars as functions of survey properties."""
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.ndimage import gaussian_filter1d
+
 class Plots:
-    def __init__(self, config,survey):
+    def __init__(self,survey=None,forecast=None,covariance=None,data=None):
         """
         Initialize Plots instance with configuration and survey details.
 
         Parameters
         ----------
-        config : configparser.ConfigParser
-            Configuration file for Lyman-alpha forest forecast.
         survey : Survey
             Instance of Survey class containing survey properties.
         """
-        self.config = config
-        self.plot_bao = config['control'].getboolean('plot bao')
-        self.plot_p3d = config['control'].getboolean('plot p3d')
-        self.plot_p3d_var = config['control'].getboolean('plot p3d var')
-
-        # We will require in some cases that n_redshift_bins > 1.
-        self.n_redshift_bins = config['power spectrum'].getint('num z bins')
+        
+        self._forecast = forecast
         # Check magnitude band
-        self.survey = survey
-        self.z_bin_centres = {}
-        self.p3d = {}
-        self.var_p3d = {}
-
-    #May not need a call but do it for now.
-    def __call__(self,covariance=None,data=None):
-        """
-        Parameters
-        ----------
-        data : dict
-            Contains data used in plotting routines.
-        """
-        self._data = data
+        self._survey = survey
         self._covariance = covariance
 
+        if data is not None:
+            self._data = data
+            self.p3d = self._data['p3d_z']
+            self.var_p3d = self._data['p3d_var_z']
 
     def plot_da_h_m(self):
         ap = self._data['ap_err_m'] * 100
         at = self._data['at_err_m'] * 100
-        band = self.survey.band
+        band = self._survey.band
         mags = self._data['magnitudes'][band]
 
         with self._make_style()[0], self._make_style()[1]: 
@@ -136,15 +122,15 @@ class Plots:
             for key in self.p3d:
                 ax.plot(self._covariance.k,
                         self.var_p3d[key].T[0], alpha = 0.5,ls='dashed',
-                        label=fr'$z = {key}, m_{{\rm max}} = {self.survey.maglist[0]}$')
+                        label=fr'$z = {key}, m_{{\rm max}} = {self._survey.maglist[0]}$')
                 ax.plot(self._covariance.k,
                         self.var_p3d[key].T[-1], alpha = 0.5,ls='dashed',
-                        label=fr'$z = {key}, m_{{\rm max}} = {self.survey.maglist[-1]}$')
+                        label=fr'$z = {key}, m_{{\rm max}} = {self._survey.maglist[-1]}$')
 
                 # for j, mag in enumerate(self.var_p3d[key].T):
                 #     ax.plot(self._covariance.k,
                 #         mag, alpha = 0.5,ls='dashed',
-                #         label=fr'$z = {key}, m_{{\rm max}} = {self.survey.maglist[j]}$')
+                #         label=fr'$z = {key}, m_{{\rm max}} = {self._survey.maglist[j]}$')
             ax.legend()
             
             self.fig = fig
@@ -154,9 +140,9 @@ class Plots:
             fig,ax = plt.subplots(1,2,figsize=(15,6))
             
             # get limits, for now fix this
-            m = np.linspace(0,23,100)
+            m = np.linspace(0,23.5,100)
             z = np.linspace(2,4,20)
-            qlf = self.survey.get_qso_lum_func
+            qlf = self._survey.get_qso_lum_func
             # plot QL at different z
             ax[0].plot(m,qlf(2.0,m),label='z=2.0')
             ax[0].plot(m,qlf(2.5,m),label='z=2.5')
@@ -165,7 +151,7 @@ class Plots:
 
             ax[0].legend(loc=2,fontsize=15)
             ax[0].set_yscale('log')
-            ax[0].set_xlim(18,23)
+            ax[0].set_xlim(16.5,23.5)
             ax[0].set_ylim(1e-3,)
             ax[0].set_xlabel('r mag',fontsize=15)
             ax[0].set_ylabel(r'dN/dzdm$\rm{ddeg}^2$',fontsize=15)
@@ -196,8 +182,8 @@ class Plots:
     def plot_neff(self,neff):
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,2,figsize=(15,6))
-            for i,zbc in enumerate(self.survey.z_bin_centres):
-                ax[0].plot(self.survey.maglist,neff[i],label=f'z={zbc}')
+            for i,zbc in enumerate(self._survey.z_bin_centres):
+                ax[0].plot(self._survey.maglist,neff[i],label=f'z={zbc}')
 
             ax[0].legend(loc=2,fontsize=15)
             ax[0].set_xlim(21,23)
@@ -205,16 +191,35 @@ class Plots:
             ax[0].set_ylabel(r'$\overline{n}_{\rm eff}[\rm (km/s)^{-3}]$',fontsize=15)
             ax[0].set_yscale('linear')
             
-            ax[1].plot(self.survey.z_bin_centres,neff[:,-1])
+            ax[1].plot(self._survey.z_bin_centres,neff[:,-1])
             ax[1].set_xlabel(r'$z$',fontsize=15)
 
             self.fig = fig
 
+    def plot_survey_volume(self,volume,z_bin_centres):
+        with self._make_style()[0], self._make_style()[1]: 
+            fig,ax = plt.subplots(1,1,figsize=(8,6))
+            ax.plot(z_bin_centres,volume/1e9,label='Forecast')
+
+            z_desi_sci = [0.65,0.75,0.85,0.95,1.05,1.15,1.25,1.35,1.45,1.55,1.65,1.75,1.85]
+            points_desi_sci = [2.63,3.15,3.65,4.10,4.52,4.89,5.22,5.50,5.75,5.97,6.15,6.30,6.43]
+
+            ax.scatter(z_desi_sci,points_desi_sci,
+                       alpha=0.5,color='black',label='DESI sci')
+
+            ax.set_xlabel(r'$z$',fontsize=15)
+            ax.set_ylabel(r'$V (h^{-1}\mathrm{Gpc})^{3}$',fontsize=15)
+            ax.set_yscale('linear')
+            ax.legend()
+
+            self.fig = fig
+
+
     def plot_weights(self,weights):
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,1,figsize=(10,6))
-            for i,zbc in enumerate(self.survey.z_bin_centres):
-                ax.plot(self.survey.maglist,weights[i],label=f'z={zbc}')
+            for i,zbc in enumerate(self._survey.z_bin_centres):
+                ax.plot(self._survey.maglist,weights[i],label=f'z={zbc}')
 
             ax.legend(loc=2,fontsize=15)
             #plt.xlim(mmin,mmax)
@@ -222,6 +227,47 @@ class Plots:
             ax.set_ylabel(r'$w(m)$',fontsize=15)
             ax.set_yscale('linear')
             
+            self.fig = fig
+
+
+    def plot_snr_per_ang(self):
+        #this is inflexible at the moment - only designed to run with DESIQSO spectro.
+        with self._make_style()[0], self._make_style()[1]:
+            fig,ax = plt.subplots(1,1,figsize=(10,6))
+            from_file = False
+            if from_file:
+                snr_mat = self._forecast.spectrograph._snr_mat
+                mags = [19.25,19.75,20.25,20.75,21.25,21.75,22.25,22.75,23.25]
+                lam = self._forecast.spectrograph._lambda_obs_m
+                for i,mag in enumerate(mags):
+                    # average over all redshift
+                    snr = snr_mat[i].mean(axis=0)
+                    ax.plot(lam,snr,label=f'r={mag}')
+                    ax.set_ylim(1e-1)
+                    ax.set_xlim(3500,6000)
+            else:
+                mags = [21,21.5,22,22.5,23]
+                zqs = [2,2.25,2.5,2.75,3,3.25,3.5,3.75,4,4.25,4.5,4.75]
+                lmax = 6000
+                lmin = 3600
+                nb = 100
+                snr = np.zeros(nb)
+                snr_z = np.zeros(nb)
+                lam = np.linspace(lmin,lmax,nb)
+                for mag in mags:
+                    snr = 0
+                    for zq in zqs:
+                        for i,l in enumerate(lam):
+                            snr_z[i] = self._forecast.spectrograph.get_snr_per_ang(mag,zq,l)
+                        snr += snr_z/len(zqs)
+
+                    ax.plot(lam,snr,label=f'r={mag}')
+
+            ax.legend(loc='lower left',fontsize=15)
+            ax.set_xlabel(r'SNR per $\AA$',fontsize=15)
+            ax.set_ylabel(r'$\lambda[\AA]$',fontsize=15)
+            ax.set_yscale('log')
+        
             self.fig = fig
 
     def _make_style(self,style='seaborn-1'):

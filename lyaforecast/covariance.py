@@ -138,6 +138,16 @@ class Covariance:
         nbins = int((lmax_forest - lmin_forest) / self.survey.pix_ang)
         self._forest_wave = np.linspace(lmin_forest,lmax_forest,nbins)
 
+    def get_survey_volume(self):
+        z = self._mean_z()
+        dkms_dhmpc = self.cosmo.velocity_from_distance(z)
+        dhmpc_ddeg = self.cosmo.distance_from_degrees(z)
+        # survey volume in units of (Mpc/h)^3
+        volume_degkms = self.survey.area_deg2 * self._get_redshift_depth()
+        volume_mpch = volume_degkms * dhmpc_ddeg**2 / dkms_dhmpc
+
+        return volume_mpch
+
 
     def _compute_p1d_kms(self,kp_kms):
         """1D Lya power spectrum in observed coordinates,
@@ -399,26 +409,21 @@ class Covariance:
         # again.
         z = self._mean_z()
 
-        # decompose into line of sight and transverse components
-        kp_hmpc = k_hmpc * mu
-        kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
         # transform from comoving to observed coordinates
-        dkms_dhmpc = self.cosmo.velocity_from_distance(z)
-        kp_kms = kp_hmpc / dkms_dhmpc
+        dkms_dmpch = self.cosmo.velocity_from_distance(z)
         dhmpc_ddeg = self.cosmo.distance_from_degrees(z)
-        kt_deg = kt_hmpc * dhmpc_ddeg
 
         # get total power in units of observed coordinates 
         # To-do: get P_total(mag)
         total_power_degkms = self._compute_total_3d_power()
         # convert into units of (Mpc/h)^3
-        total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dhmpc
+        total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dmpch
         # survey volume in units of (Mpc/h)^3
         volume_degkms = self.survey.area_deg2 * self._get_redshift_depth()
-        volume_hmpc = volume_degkms * dhmpc_ddeg**2 / dkms_dhmpc
+        volume_mpch = volume_degkms * dhmpc_ddeg**2 / dkms_dmpch
         # based on Eq 8 in Seo & Eisenstein (2003), but note that here we
         # use 0 < mu < 1 and they used -1 < mu < 1
-        num_modes = volume_hmpc * k_hmpc**2 * self._dk * self.dmu / 4 * np.pi**2
+        num_modes = volume_mpch * k_hmpc**2 * self._dk * self.dmu / 4 * np.pi**2
         power_variance = 2 * total_power_hmpc**2 / num_modes
 
         #If not per magnitude, return power var for mmax only. 

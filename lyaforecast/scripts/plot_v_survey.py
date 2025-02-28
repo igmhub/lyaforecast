@@ -8,11 +8,13 @@ def main():
 
     forecast = Forecast(args.config)
 
-    plotter = Plots(forecast=forecast)
+    plotter = Plots(forecast.config,forecast.survey)
 
-    plotter.plot_snr_per_ang()
+    volume,z_bin_centres = forecast.compute_survey_volume()
 
-    plotter.fig.savefig(forecast.out_folder.joinpath('snr_per_ang.png'))
+    plotter.plot_survey_volume(volume,z_bin_centres)
+
+    plotter.fig.savefig(forecast.out_folder.joinpath('volume.png'))
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(

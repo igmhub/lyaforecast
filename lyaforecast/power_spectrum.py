@@ -17,7 +17,8 @@ class PowerSpectrum:
     def compute_linear_power_evol(self,z,k_hmpc,k_min,k_max):
         """Scale linear power, assuming EdS scale with redshift"""
         if z<1.8:
-            raise ValueError('Can not use EdS to go below z = 1.8')
+            #raise ValueError('Can not use EdS to go below z = 1.8')
+            print('Warning, going below z = 1.8 with EdS power scaling')
         if self.cosmo.z_ref<1.8:
             raise ValueError('Can not have z_ref below 1.8, input:',self.cosmo.z_ref)
         pk_zref = self.cosmo.get_pk_lin(k_hmpc,k_min,k_max)

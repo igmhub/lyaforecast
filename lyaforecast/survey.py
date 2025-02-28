@@ -40,7 +40,7 @@ class Survey:
         self.l_obs_lower_limit = self.lrmin * (1 + self.zq_min)
         self.l_obs_upper_limit = self.lrmax * (1 + self.zq_max)
         #number of exposures
-        self.num_exp = config['survey'].getint('num exposures')
+        self.num_exp = config['survey'].getfloat('num exposures')
 
         #get magnitude band 
         self.band = config['survey'].get('band')
