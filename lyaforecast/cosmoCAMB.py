@@ -8,7 +8,7 @@ class CosmoCamb:
     SPEED_LIGHT = 2.998e5 #km/s
     LYA_REST = 1215.67 #Angstroms
 
-    def __init__(self,ini,z_ref):
+    def __init__(self,ini,z_ref=None):
         """Setup cosmological model.
         Reference z is set in config with other parameters"""
 

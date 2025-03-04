@@ -207,7 +207,7 @@ class Spectrograph:
         # DESI file returns S/N per Angstrom, per file_num_exp exposures
         snr_per_ang = self._snr_interp([trmag,zq,lam_obs])
         # scale with pixel width
-        snr_per_exp = snr_per_ang / np.sqrt(pix_width)
+        snr_per_exp = snr_per_ang * np.sqrt(pix_width)
         # scale with number of exposures
         snr = snr_per_exp * np.sqrt(num_exp / self._file_num_exp)
         # prevent division by zero

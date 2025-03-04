@@ -78,10 +78,9 @@ class AnalyticBias:
             Values are cosmology dependent, but we ignore it here.
             If linear=True, return only Kaiser.
             Wavenumbers in h/Mpc. """
-
         b_delta = self._get_density_bias(z,which)
         beta = self._get_beta_rsd(z,which)
-        kaiser = (b_delta * (1+ beta * mu**2))**2
+        kaiser = (b_delta * (1 + beta * mu**2))**2
         if linear:
             return kaiser
         else:

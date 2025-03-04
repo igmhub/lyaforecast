@@ -8,7 +8,7 @@ def main():
 
     forecast = Forecast(args.config)
 
-    forecast.run_bao_forecast()
+    forecast.run_bao_forecast(forecast)
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(

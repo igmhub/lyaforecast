@@ -8,11 +8,13 @@ def main():
 
     forecast = Forecast(args.config)
 
-    plotter = Plots(forecast)
+    plotter = Plots(forecast=forecast)
 
-    plotter.plot_qso_lf()
+    p3d_z_k_mu,p3d_var_z_k_mu,n_pk_z, z_bin_centres = forecast.compute_pk()
 
-    plotter.fig.savefig(forecast.out_folder.joinpath('qso_lf.png'))
+    plotter.plot_n_pk_z(n_pk_z,z_bin_centres)
+
+    plotter.fig.savefig(forecast.out_folder.joinpath('nP.png'))
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(

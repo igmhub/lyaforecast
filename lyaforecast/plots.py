@@ -1,10 +1,9 @@
 """Plot power spectra and parameter error bars as functions of survey properties."""
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.ndimage import gaussian_filter1d
 
 class Plots:
-    def __init__(self,survey=None,forecast=None,covariance=None,data=None):
+    def __init__(self,forecast=None,data=None):
         """
         Initialize Plots instance with configuration and survey details.
 
@@ -15,9 +14,9 @@ class Plots:
         """
         
         self._forecast = forecast
-        # Check magnitude band
-        self._survey = survey
-        self._covariance = covariance
+        if forecast is not None:
+            self._survey = forecast.survey
+            self._covariance = forecast.covariance
 
         if data is not None:
             self._data = data
@@ -73,40 +72,53 @@ class Plots:
             ax.set_yscale('linear')
             self.fig = fig
 
-    def plot_p3d_z(self):
+    def plot_pk_z(self,p3d_z_k_mu,var_z_k_mu,z_bins):
+        mu_ind = 5
+        mu_val = round(self._covariance.mu[mu_ind],2)
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,1,figsize=(10,6))
             ax.set_xlabel(fr'k')
-            ax.set_ylabel(fr'$kP(k)/\pi$')
+            ax.set_ylabel(fr'$kP(k,\mu={mu_val})/\pi$')
             #ax.set_xlim(0.03,0.3)
             ax.autoscale(axis='y')
             ax.grid()
             ax.set_yscale('linear')
-            for i,key in enumerate(self.p3d):
-                #if i > 0:
-                #    continue
+            for j,p_k_mu in enumerate(p3d_z_k_mu[:-5,:,:]):
                 ax.errorbar(self._covariance.k,
-                        self._covariance.k * self.p3d[key] / np.pi,
-                        yerr= self._covariance.k * self.var_p3d[key] / np.pi,
-                        label=f'z = {key}',
+                        self._covariance.k * p_k_mu[:,mu_ind] / np.pi,
+                        yerr= self._covariance.k * var_z_k_mu[j,:,mu_ind] / np.pi,
+                        label=f'z = {z_bins[j]}',
                         alpha=0.3)
             ax.legend()
             
             self.fig = fig
 
-    def plot_var_p3d_z(self):
-        with self._make_style()[0], self._make_style()[1]: 
+    def plot_var_pk_z(self,var_z_k_mu,z_bins):
+        mu_ind = 5
+        mu_val = round(self._covariance.mu[mu_ind],2)
+        with self._make_style()[0], self._make_style()[1]:
             fig,ax = plt.subplots(1,1,figsize=(10,6))
-            ax.set_xlabel(fr'k')
-            ax.set_ylabel(f'var[P(k)]')
+            ax.set_xlabel(fr'k [$h$/Mpc]')
+            ax.set_ylabel(fr'$\sigma_P(k,\mu = {mu_val})$')
             ax.grid()
             ax.set_yscale('log')
-
-            for key in self.p3d:
+            for j,var_k_mu in enumerate(var_z_k_mu[:-5,:,:]):
                 ax.plot(self._covariance.k,
-                        self.var_p3d[key],
-                        label=f'z = {key}')
+                        var_k_mu[:,mu_ind],
+                        label=f'z = {z_bins[j]}',
+                        alpha=0.3)
             ax.legend()
+            
+            self.fig = fig
+
+    def plot_n_pk_z(self,n_p3d_z,zbs):
+        with self._make_style()[0], self._make_style()[1]: 
+            fig,ax = plt.subplots(1,1,figsize=(10,6))
+            ax.set_xlabel(fr'z')
+            ax.set_ylabel(r'$\overline{n}P(0.14,0.6)$')
+            ax.grid()
+            ax.set_yscale('linear')
+            ax.plot(zbs,n_p3d_z)
             
             self.fig = fig
 

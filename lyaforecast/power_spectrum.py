@@ -1,5 +1,5 @@
 import numpy as np
-from lyaforecast.analystic_biases import AnalyticBias
+from lyaforecast.analytic_biases import AnalyticBias
 
 class PowerSpectrum:
     """Class to store power spectra models.
@@ -10,8 +10,7 @@ class PowerSpectrum:
     def __init__(self, cosmo):
         #define cosmology class
         self.cosmo = cosmo
-        #isotropic linear matter power
-        #self.linear_power = cosmo.get_pk_lin_interp(self.kmin,self.kmax,1000)
+        #get analytical biases
         self.bias = AnalyticBias()
 
     def compute_linear_power_evol(self,z,k_hmpc,k_min,k_max):
@@ -23,6 +22,7 @@ class PowerSpectrum:
             raise ValueError('Can not have z_ref below 1.8, input:',self.cosmo.z_ref)
         pk_zref = self.cosmo.get_pk_lin(k_hmpc,k_min,k_max)
         eds = ((1+self.cosmo.z_ref)/(1+z))**2
+
         return pk_zref * eds
 
     def compute_p3d_hmpc(self,z,k_hmpc,mu,k_min,k_max,

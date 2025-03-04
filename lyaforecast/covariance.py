@@ -42,7 +42,6 @@ class Covariance:
         mu_edges = np.linspace(self._mu_min,self._mu_max, self._num_mu_bins)
         self.mu = mu_edges[:-1] + np.diff(mu_edges)/2     
         self.dmu = np.diff(mu_edges)[0]
-
         # These will be dependent on redshift bins, 
         # which are passed during foreacast run (for now).
         self.lmin = None
@@ -174,7 +173,7 @@ class Covariance:
         kt_hmpc = kt_deg / dhmpc_ddeg
         # compute polar decomposition
         k_hmpc = np.sqrt(kp_hmpc**2 + kt_hmpc**2)
-        mu = kp_hmpc / (k_hmpc + 1.e-10) #cg: what's the point of this addition?
+        mu = kp_hmpc / (k_hmpc + 1.e-10)
         # compute power in Mpc/h (from power_spectrum module)
         p3d_hmpc = self.power_spec.compute_p3d_hmpc(z,k_hmpc,mu
                                                   ,self._k_min_hmpc,
@@ -221,7 +220,7 @@ class Covariance:
         # weighted density of quasars
         #I1 = np.sum(dndm_degkms * weights) * dm
         #move to using cumsum so we can plot as a function of magnitude
-        int_1 = np.cumsum(integrand) * dm
+        int_1 = np.cumsum(integrand*dm)
 
         return int_1
 
@@ -234,7 +233,7 @@ class Covariance:
         dndm_degkms = dndm_degdz / dkms_dz
         dm = self.survey.maglist[1]-self.survey.maglist[0]
         integrand = dndm_degkms * weights**2
-        int_2 = np.cumsum(integrand) * dm
+        int_2 = np.cumsum(integrand*dm)
         
         return int_2
 
@@ -249,7 +248,7 @@ class Covariance:
         dndm_degkms = dndm_degdz / dkms_dz
         dm = self.survey.maglist[1] - self.survey.maglist[0]
         integrand = dndm_degkms * weights**2 * pixel_var
-        int_3 = np.cumsum(integrand) * dm
+        int_3 = np.cumsum(integrand*dm)
 
         return int_3
 
@@ -388,15 +387,14 @@ class Covariance:
         # PNeff in McDonald & Eisenstein (2007)
         self._effective_noise_power = int_3 * pixel_length / (int_1**2 * forest_length)
 
-    def _compute_total_3d_power(self):
-        """Sum of 3D Lya power, aliasing and effective noise power. 
-            If Pw2D or PN_eff are not passed, it will compute them"""
-        # figure out mean redshift of the mini-survey
-        z = self._mean_z()
+    def _compute_total_3d_power(self,kt_deg,kp_kms):
+        """Sum of 3D Lya power, aliasing and effective noise power"""
         # previously computed p2wd and pn_eff.
-        total_power = self._p3d_w + self._aliasing_weights * self._p1d_w + self._effective_noise_power
+        total_power = self._compute_p3d_kms(kt_deg,kp_kms) + self._aliasing_weights * self._compute_p1d_kms(kp_kms) + self._effective_noise_power
 
         return total_power
+    
+    
 
     def compute_3d_power_variance(self,k_hmpc,mu
                         ):
@@ -413,9 +411,16 @@ class Covariance:
         dkms_dmpch = self.cosmo.velocity_from_distance(z)
         dhmpc_ddeg = self.cosmo.distance_from_degrees(z)
 
+        # decompose into line of sight and transverse components
+        kp_hmpc = k_hmpc * mu
+        kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
+        # transform from comoving to observed coordinates
+        kp_kms = kp_hmpc / dkms_dmpch
+        kt_deg = kt_hmpc * dhmpc_ddeg
+
         # get total power in units of observed coordinates 
         # To-do: get P_total(mag)
-        total_power_degkms = self._compute_total_3d_power()
+        total_power_degkms = self._compute_total_3d_power(kt_deg,kp_kms)
         # convert into units of (Mpc/h)^3
         total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dmpch
         # survey volume in units of (Mpc/h)^3
@@ -432,6 +437,26 @@ class Covariance:
             power_variance = power_variance[-1]
 
         return power_variance
+    
+    def compute_n_pk(self,k,mu):
+        """Compute power per node nP at given k (h/Mpc) and mu"""
+        z = self._mean_z()
+
+        # transform from comoving to observed coordinates
+        dkms_dmpch = self.cosmo.velocity_from_distance(z)
+        dhmpc_ddeg = self.cosmo.distance_from_degrees(z)
+
+        # decompose into line of sight and transverse components
+        kp_hmpc = k * mu
+        kt_hmpc = k * np.sqrt(1.0-mu**2)
+        # transform from comoving to observed coordinates
+        kp_kms = kp_hmpc / dkms_dmpch
+        kt_deg = kt_hmpc * dhmpc_ddeg
+                
+        total_power_degkms = self._compute_total_3d_power(kt_deg,kp_kms)
+        noise = total_power_degkms - self._compute_p3d_kms(kt_deg,kp_kms)
+        
+        return self._p3d_w / noise[-1]
     
     def compute_qso_auto_power(self):
         return
