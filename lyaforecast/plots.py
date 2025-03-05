@@ -52,16 +52,20 @@ class Plots:
         ap_desi_sci = [1.99,2.11,2.26,2.47,2.76,3.18,3.70,4.57,6.19,8.89]
         at_desi_sci = [1.95,2.18,2.46,2.86,3.40,4.21,5.29,7.10,10.46,15.91]
 
+        zs_desi_sv = np.array([2.15,2.25,2.35,2.45,2.55,2.65,2.75,2.85,2.95,3.05,3.15,3.25,3.35,3.45])
+        ap_desi_sv = [2.16,2.24,2.36,2.52,2.77,3.11,3.5,4.05,4.71,5.51,6.78,8.41,11.1,14.8]
+        at_desi_sv = [2.02,2.14,2.33,2.56,2.9,3.38,3.95,4.69,5.59,6.73,8.47,10.73,14.48,19.92]
+
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,1,figsize=(10,6))
             #ax.plot(mags[1:],ap[1:]/ap[:-1],label=fr'$\alpha_\parallel$')
-            ax.plot(zs,ap,label=fr'$\alpha_\parallel$')
-            ax.plot(zs,at,label=fr'$\alpha_\perp$',linestyle='dashed')
-            ax.scatter(zs_desi_sci,ap_desi_sci,
-                       label=fr'$\alpha_\parallel$ DESI',color='black',
+            ax.plot(zs,ap,label=fr'$\alpha_\parallel forecast$')
+            ax.plot(zs,at,label=fr'$\alpha_\perp forecast$',linestyle='dashed')
+            ax.scatter(zs_desi_sv,ap_desi_sv,
+                       label=fr'$\alpha_\parallel$ DESI SV',color='red',
                        marker='.',alpha=0.5)
-            ax.scatter(zs_desi_sci,at_desi_sci,
-                       label=fr'$\alpha_\perp$ DESI',color='black',
+            ax.scatter(zs_desi_sv,at_desi_sv,
+                       label=fr'$\alpha_\perp$ DESI SV',color='blue',
                        marker='x',alpha=0.5)
             ax.set_xlabel(fr'$z$')
             ax.set_ylabel(f'% error')
@@ -150,10 +154,10 @@ class Plots:
     def plot_qso_lf(self):
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,2,figsize=(15,6))
-            
+
             # get limits, for now fix this
             m = np.linspace(0,23.5,100)
-            z = np.linspace(2,4,20)
+            z = np.linspace(2.1,3.5,14)
             qlf = self._survey.get_qso_lum_func
             # plot QL at different z
             ax[0].plot(m,qlf(2.0,m),label='z=2.0')
@@ -170,22 +174,32 @@ class Plots:
             ax[0].grid()
             
             #dn_dzddeg vs z
+            dz = z[1] - z[0]
             qlf_dzddeg = np.zeros(z.size)
             for k,zi in enumerate(z):
                 qlf_dzddeg_i = np.sum(qlf(zi,m) * (m[1] - m[0]))
                 qlf_dzddeg[k] = qlf_dzddeg_i
 
-            ax[1].plot(z,qlf_dzddeg,label=r'$r_{\rm max}=23$')
+            ax[1].plot(z,qlf_dzddeg,label=r'Forecast')
+            #ax[1].plot(z,qlf_dzddeg * dz,label=r'Forecast')
 
-            desi_sci_z = [1.96,2.12,2.28,2.43,2.59,2.75,2.91,
-                          3.07,3.23,3.39,3.55,3.70,3.86,4.02]
-            desi_sci_points = [82,69,53,43,37,31,26,21,16,13,9,7,5,3]
+            desi_sci_z = np.array([1.96,2.12,2.28,2.43,2.59,2.75,2.91,
+                          3.07,3.23,3.39,3.55,3.70,3.86,4.02])
+            desi_sci_points = np.array([82,69,53,43,37,31,26,21,16,13,9,7,5,3])
+
+            desi_sv_z = np.array([2.15,2.25,2.35,2.45,2.55,2.65,2.75,2.85,2.95,3.05,3.15,3.25,3.35,3.45])
+            desi_sv_points = np.array([8.8,8,7.2,6.2,5.3,4.4,3.6,3.3,2.6,2.2,1.7,1.4,1.1,0.7])
+
 
             ax[1].scatter(desi_sci_z,desi_sci_points,color='black',
                        marker='x',alpha=0.5,label=r'DESI sci')
+
+            ax[1].scatter(desi_sv_z,desi_sv_points/(0.1),color='blue',
+                       marker='x',alpha=0.7,label=r'DESI SV')
         
             ax[1].set_xlabel('z',fontsize=15)
-            ax[1].set_ylabel(r'dN/dz$\rm{ddeg}^2$',fontsize=15)
+            #ax[1].set_ylabel(r'$dN/dz$\rm{ddeg}^2$',fontsize=15)
+            ax[1].set_ylabel(r'$dn/dz$',fontsize=15)
             ax[1].grid()
             ax[1].legend()
 

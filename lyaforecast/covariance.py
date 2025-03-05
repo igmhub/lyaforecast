@@ -90,7 +90,7 @@ class Covariance:
             self._res_kms = res_ang * self.cosmo.velocity_from_wavelength(z)
         
     def _get_zq_bin(self):
-        # given wavelength range covered in bin, compute central redshift and mean wavelength
+        # given wavelength range covered in bin, compute central qso redshift and mean wavelength
         if not (self.lmin is None or self.lmax is None):
             # mean wavelenght of bin
             self._lc = np.sqrt(self.lmin * self.lmax)
@@ -127,7 +127,12 @@ class Covariance:
         c_kms = self.cosmo.SPEED_LIGHT
         lmax_forest = self.survey.lrmax * (1 + self._zq)
         lmin_forest = self.survey.lrmin * (1 + self._zq)
-        Lq_kms = c_kms*np.log(lmax_forest/lmin_forest)
+
+        #this ensures the forest limits cannot be out of the defined bin.
+        lminf = np.fmax(lmin_forest,self.lmin)
+        lmaxf = np.fmin(lmax_forest,self.lmax)
+
+        Lq_kms = c_kms*np.log(lmaxf/lminf)
 
         return Lq_kms
     
@@ -393,8 +398,6 @@ class Covariance:
         total_power = self._compute_p3d_kms(kt_deg,kp_kms) + self._aliasing_weights * self._compute_p1d_kms(kp_kms) + self._effective_noise_power
 
         return total_power
-    
-    
 
     def compute_3d_power_variance(self,k_hmpc,mu
                         ):
@@ -458,7 +461,19 @@ class Covariance:
         
         return self._p3d_w / noise[-1]
     
-    def compute_qso_auto_power(self):
+
+    def _compute_qso_auto_power(self):
+
+        #compute weights
+        #computer covariance
+
+        return
+    
+    def compute_qso_auto_power_variance(self):
+
+        #compute weights
+        #computer covariance
+
         return
     
     def compute_cross_power_variance(self,k_hmpc,mu

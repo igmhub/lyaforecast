@@ -73,7 +73,7 @@ class Survey:
          # This assumes entries are evenly spaced. 
         dz = z[1] - z[0]
         dm = m[1] - m[0]
-        tdNdmdzddeg2 /= (dz*dm) #check this.
+        tdNdmdzddeg2 /= (dz*dm)
         tdNdmdzddeg2 = np.reshape(tdNdmdzddeg2,[len(z),len(m)])
 
         #Calum: This previous method makes no sense to me? It returns a negative number when m>mmax
@@ -88,8 +88,7 @@ class Survey:
         self._get_qso_lum_func = RectBivariateSpline(z,m,
                   tdNdmdzddeg2,bbox=[self._zmin,self._zmax,self._mmin,self._mmax],
                   kx=2,ky=2)
-    
-    # #
+
     def get_qso_lum_func(self,x_query, y_query):
             
             # x_clamped = np.clip(x_query, self._zmin, self._zmax)
