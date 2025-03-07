@@ -48,7 +48,7 @@ class Forecast:
         self.spectrograph = Spectrograph(self.config, self.survey)
 
         #load power spectrum instance
-        self.power_spec = PowerSpectrum(self.cosmo)
+        self.power_spec = PowerSpectrum(self.config, self.cosmo, self.spectrograph)
 
         #initialise covariance class (McDonald & Eisenstein (2007)),
         #  that stores info and methods to compute p3d and its variance
@@ -60,24 +60,46 @@ class Forecast:
 
     def compute_weights(self):
         print('Computing weights')
-        z_bin_centres = np.zeros(self.survey.num_z_bins)
-        zz = np.linspace(self.survey.zmin, self.survey.zmax, self.survey.num_z_bins+1)
         weights = np.zeros((self.survey.num_z_bins,self.survey.num_mag_bins))
-        for iz in range(len(zz)-1):
-            z1=zz[iz]
-            z2=zz[iz+1]
-            z_bin_centre = z1 + (z2-z1)/2
-            z_bin_centres[iz] = z_bin_centre
+        use_z_bin_list = False
+        if self.config['survey'].get('z bin centres',None) is not None:
+            z_bin_centres = self.config['survey'].get('z bin centres')
+            z_bin_centres = np.array(z_bin_centres.split(",")).astype(float)
+            dz = np.zeros(z_bin_centres.size)
+            dz[1:-1] = (z_bin_centres[2:]-z_bin_centres[:-2])/2.
+            dz[0]   = z_bin_centres[1]-z_bin_centres[0]
+            dz[-1]  = z_bin_centres[-1]-z_bin_centres[-2]
+            len_zz = len(z_bin_centres)
+            use_z_bin_list = True
+        else:
+            zz = np.linspace(self.survey.zmin, self.survey.zmax,
+                          self.survey.num_z_bins+1)
+            z_bin_centres = np.zeros(self.survey.num_z_bins)
+            len_zz = len(zz) - 1
+
+        for iz in range(len_zz):
+            #limits of individual redshift bins
+            if use_z_bin_list:
+                z1=z_bin_centres[iz]-dz[iz]/2
+                z2=z_bin_centres[iz]+dz[iz]/2
+                z_bin_centre = z_bin_centres[iz]
+            else:
+                z1=zz[iz]
+                z2=zz[iz+1]
+                z_bin_centre = z1 + (z2-z1)/2
+                z_bin_centres[iz] = z_bin_centre
+
             print(f"z bin = [{z1}-{z2}], bin centre = {z_bin_centre}")
             
             lmin = self.cosmo.LYA_REST*(1+z1)
             lmax = self.cosmo.LYA_REST*(1+z2)
 
             self.covariance(lmin,lmax)
+            self.covariance.compute_eff_density_and_noise()
 
-            weights[iz] = self.covariance.compute_weights()
+            weights[iz] = self.covariance.w
 
-        return weights
+        return weights, z_bin_centres
 
     def compute_neff(self):
         """Compute effective number density of pixels, 
@@ -149,7 +171,8 @@ class Forecast:
                              self.covariance._num_mu_bins-1))
         p3d_var_z_k_mu = np.zeros_like(p3d_z_k_mu)
 
-        n_pk_z = np.zeros(self.survey.num_z_bins)
+        n_pk_z_lya = np.zeros(self.survey.num_z_bins)
+        n_pk_z_qso = np.zeros(self.survey.num_z_bins)
         use_z_bin_list = False
 
         if self.config['survey'].get('z bin centres',None) is not None:
@@ -186,17 +209,23 @@ class Forecast:
 
             self.covariance(lmin,lmax)
 
+            # some survey settings
+            pix_width = self.covariance._pix_kms
+            resolution = self.covariance._res_kms
+
+            #weighting
             self.covariance.compute_eff_density_and_noise()
 
-            n_pk_z[iz] = self.covariance.compute_n_pk(0.14,0.6)
+            n_pk_z_lya[iz],n_pk_z_qso[iz] = self.covariance.compute_n_pk(0.14,0.6)
 
-            for i, mu in enumerate(self.covariance.mu):
+            for i, mu in enumerate(self.power_spec.mu):
 
-                p3d_mu = np.array([self.covariance.compute_p3d_hmpc(k,mu) 
-                                        for k in self.covariance.k]) # (Mpc/h)**3
+                p3d_mu = np.array([self.power_spec.compute_p3d_hmpc_smooth(z_bin_centre, k,
+                                                 mu, pix_width, resolution, 'lya') 
+                                        for k in self.power_spec.k]) # (Mpc/h)**3
 
                 p3d_var_mu = np.array([self.covariance.compute_3d_power_variance(k,mu) 
-                                    for k in self.covariance.k]) # (Mpc/h)**6
+                                    for k in self.power_spec.k]) # (Mpc/h)**6
 
 
                 p3d_z_k_mu[iz,:,i] = p3d_mu
@@ -211,9 +240,8 @@ class Forecast:
                 #     p3d_z[str(z_bin_centre)] += p3d * self.covariance.dmu
                 #     p3d_var_z[str(z_bin_centre)] += (1/self.covariance.mu.size)**2  * p3d_variance  
 
-        return p3d_z_k_mu,p3d_var_z_k_mu,n_pk_z, z_bin_centres
+        return z_bin_centres,p3d_z_k_mu,p3d_var_z_k_mu,n_pk_z_lya,n_pk_z_qso
 
-            
     def compute_bao(self):
         pass
 
@@ -275,27 +303,20 @@ class Forecast:
             #store info in plots
             #self.plots.z_bin_centres[str()]
 
-            # observed wavelength range from redshift limits, used to calculate mean 
-            # redshifts and evolve biases.
-            # sadly it means we can't pre-compute eff noise and density.
+            # observed wavelength range from redshift limits
             lmin = self.cosmo.LYA_REST*(1+z1)
             lmax = self.cosmo.LYA_REST*(1+z2)
 
             #call function, setting bin width
             self.covariance(lmin,lmax)
+
+            # some survey settings
+            pix_width = self.covariance._pix_kms
+            resolution = self.covariance._res_kms
+
             # this uses Luminosity, density, noise model
-            # Calum: now computed in the Covariance class initialisation.
-            #np_eff,Pw2D,PN_eff = forecast.EffectiveDensityAndNoise()
             self.covariance.compute_eff_density_and_noise()
                     
-            # need linear
-            #Calum: this info now stored in Covariance instance.
-            # k      = np.linspace(0.01,1,100) # h/Mpc
-            # dk     = (k[1]-k[0]) # h/Mpc
-            # dlk    = dk/k
-            # lk     = np.log(k)
-            # mu_bin_edges = np.linspace(0,1.,10)
-            
             # There is no need to add a marginalization on additive polynomial coefficients
             # because I subtract a high degree polynomial on P(k) to keep only the BAO wiggles
             # (such that the derivatives of the model wrt the alphas are by construction orthogonal to
@@ -310,25 +331,26 @@ class Forecast:
             else:
                 fisher_matrix = np.zeros((2,2))            
             
-            for i, mu in enumerate(self.covariance.mu):
+            for i, mu in enumerate(self.power_spec.mu):
 
-                p3d = np.array([self.covariance.compute_p3d_hmpc(k,mu) 
-                                        for k in self.covariance.k]) # (Mpc/h)**3
+                p3d = np.array([self.power_spec.compute_p3d_hmpc_smooth(z_bin_centre, k,
+                                                 mu, pix_width, resolution, 'lya') 
+                                        for k in self.power_spec.k]) # (Mpc/h)**3
 
                 p3d_variance = np.array([self.covariance.compute_3d_power_variance(k,mu) 
-                                    for k in self.covariance.k]) # (Mpc/h)**6
+                                    for k in self.power_spec.k]) # (Mpc/h)**6
 
                 # #not making a great approximation here.
                 if i==0:
-                    p3d_z[str(z_bin_centre)] = p3d * self.covariance.dmu
-                    p3d_var_z[str(z_bin_centre)] = (1/self.covariance.mu.size)**2 * p3d_variance
+                    p3d_z[str(z_bin_centre)] = p3d * self.power_spec.dmu
+                    p3d_var_z[str(z_bin_centre)] = (1/self.power_spec.mu.size)**2 * p3d_variance
                 else:
-                    p3d_z[str(z_bin_centre)] += p3d * self.covariance.dmu
-                    p3d_var_z[str(z_bin_centre)] += (1/self.covariance.mu.size)**2  * p3d_variance             
+                    p3d_z[str(z_bin_centre)] += p3d * self.power_spec.dmu
+                    p3d_var_z[str(z_bin_centre)] += (1/self.power_spec.mu.size)**2  * p3d_variance             
 
                 # compute a smooth version of p3d
                 # not sure how to do much better than a polynomial fit
-                x = self.covariance.logk
+                x = self.power_spec.logk
                 y = np.log(p3d)
                 x -= np.mean(x)
                 x /= (np.max(x)-np.min(x))
@@ -342,8 +364,8 @@ class Forecast:
                 model = p3d - smooth_p3d
                 
                 # add gaussian damping
-                kp = mu * self.covariance.k
-                kt = np.sqrt(1-mu**2) * self.covariance.k
+                kp = mu * self.power_spec.k
+                kt = np.sqrt(1-mu**2) * self.power_spec.k
                 
                 # Eisenstein, Seo, White, 2007, Eq. 12
                 sig_nl_perp = 3.26 # Mpc/h
@@ -366,9 +388,9 @@ class Forecast:
                     
                 
                 # derivative of model wrt to log(k)
-                dmodel = np.zeros(self.covariance.k.size)
+                dmodel = np.zeros(self.power_spec.k.size)
                 dmodel[1:] = model[1:]-model[:-1]
-                dmodel_dlk  = dmodel/self.covariance.dlogk
+                dmodel_dlk  = dmodel/self.power_spec.dlogk
                 
                 # k = sqrt( kp**2 + kt**2)
                 # k'  = sqrt( ap**2*k**2*mu2 + at**2*k**2*(1-mu2))

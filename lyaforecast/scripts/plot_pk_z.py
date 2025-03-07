@@ -10,7 +10,7 @@ def main():
 
     plotter = Plots(forecast=forecast)
 
-    p3d_z_k_mu,p3d_var_z_k_mu,n_pk_z, z_bin_centres = forecast.compute_pk()
+    z_bin_centres,p3d_z_k_mu,p3d_var_z_k_mu,_,_ = forecast.compute_pk()
 
     plotter.plot_pk_z(p3d_z_k_mu,p3d_var_z_k_mu,z_bin_centres)
 

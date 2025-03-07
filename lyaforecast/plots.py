@@ -115,14 +115,16 @@ class Plots:
             
             self.fig = fig
 
-    def plot_n_pk_z(self,n_p3d_z,zbs):
+    def plot_n_pk_z(self,zbs,n_p3d_z_lya,n_p3d_z_qso):
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,1,figsize=(10,6))
             ax.set_xlabel(fr'z')
             ax.set_ylabel(r'$\overline{n}P(0.14,0.6)$')
             ax.grid()
             ax.set_yscale('linear')
-            ax.plot(zbs,n_p3d_z)
+            ax.plot(zbs,n_p3d_z_lya,label='lya')
+            ax.plot(zbs,n_p3d_z_lya,label='qso')
+            ax.legend()
             
             self.fig = fig
 
@@ -143,10 +145,6 @@ class Plots:
                         self.var_p3d[key].T[-1], alpha = 0.5,ls='dashed',
                         label=fr'$z = {key}, m_{{\rm max}} = {self._survey.maglist[-1]}$')
 
-                # for j, mag in enumerate(self.var_p3d[key].T):
-                #     ax.plot(self._covariance.k,
-                #         mag, alpha = 0.5,ls='dashed',
-                #         label=fr'$z = {key}, m_{{\rm max}} = {self._survey.maglist[j]}$')
             ax.legend()
             
             self.fig = fig
@@ -157,7 +155,6 @@ class Plots:
 
             # get limits, for now fix this
             m = np.linspace(0,23.5,100)
-            z = np.linspace(2.1,3.5,14)
             qlf = self._survey.get_qso_lum_func
             # plot QL at different z
             ax[0].plot(m,qlf(2.0,m),label='z=2.0')
@@ -172,23 +169,27 @@ class Plots:
             ax[0].set_xlabel('r mag',fontsize=15)
             ax[0].set_ylabel(r'dN/dzdm$\rm{ddeg}^2$',fontsize=15)
             ax[0].grid()
-            
+
             #dn_dzddeg vs z
-            dz = z[1] - z[0]
-            qlf_dzddeg = np.zeros(z.size)
-            for k,zi in enumerate(z):
+
+            desi_sv_z = np.array([1.65,1.75,1.85,1.95,2.05,2.15,2.25,2.35,2.45,
+                                  2.55,2.65,2.75,2.85,2.95,3.05,3.15,3.25,3.35,3.45])
+            desi_sv_points = np.array([12.1,11.8,11.1,10.6,9.5,8.8,8,7.2,
+                                       6.2,5.3,4.4,3.6,3.3,2.6,2.2,1.7,1.4,1.1,0.7])
+            
+            dz = desi_sv_z[1] - desi_sv_z[0]
+            qlf_dzddeg = np.zeros(desi_sv_z.size)
+            for k,zi in enumerate(desi_sv_z):
                 qlf_dzddeg_i = np.sum(qlf(zi,m) * (m[1] - m[0]))
                 qlf_dzddeg[k] = qlf_dzddeg_i
 
-            ax[1].plot(z,qlf_dzddeg,label=r'Forecast')
+            ax[1].plot(desi_sv_z,qlf_dzddeg,label=r'Forecast')
             #ax[1].plot(z,qlf_dzddeg * dz,label=r'Forecast')
 
             desi_sci_z = np.array([1.96,2.12,2.28,2.43,2.59,2.75,2.91,
                           3.07,3.23,3.39,3.55,3.70,3.86,4.02])
             desi_sci_points = np.array([82,69,53,43,37,31,26,21,16,13,9,7,5,3])
 
-            desi_sv_z = np.array([2.15,2.25,2.35,2.45,2.55,2.65,2.75,2.85,2.95,3.05,3.15,3.25,3.35,3.45])
-            desi_sv_points = np.array([8.8,8,7.2,6.2,5.3,4.4,3.6,3.3,2.6,2.2,1.7,1.4,1.1,0.7])
 
 
             ax[1].scatter(desi_sci_z,desi_sci_points,color='black',
@@ -227,32 +228,35 @@ class Plots:
             fig,ax = plt.subplots(1,1,figsize=(8,6))
             ax.plot(z_bin_centres,volume/1e9,label='Forecast')
 
-            z_desi_sci = [0.65,0.75,0.85,0.95,1.05,1.15,1.25,1.35,1.45,1.55,1.65,1.75,1.85]
-            points_desi_sci = [2.63,3.15,3.65,4.10,4.52,4.89,5.22,5.50,5.75,5.97,6.15,6.30,6.43]
+            z_desi_sv = [1.65,1.75,1.85,1.95,2.05]
+            points_desi_sv = [0.17,0.16,0.14,0.13,0.1]
 
-            ax.scatter(z_desi_sci,points_desi_sci,
-                       alpha=0.5,color='black',label='DESI sci')
+            ax.scatter(z_desi_sv,points_desi_sv,
+                       alpha=0.5,color='black',label='DESI SV')
 
             ax.set_xlabel(r'$z$',fontsize=15)
-            ax.set_ylabel(r'$V (h^{-1}\mathrm{Gpc})^{3}$',fontsize=15)
+            ax.set_ylabel(r'$V_{\rm eff} (h^{-1}\mathrm{Gpc})^{3}$',fontsize=15)
             ax.set_yscale('linear')
             ax.legend()
 
             self.fig = fig
 
-
-    def plot_weights(self,weights):
+    def plot_weights(self,weights,zbins):
         with self._make_style()[0], self._make_style()[1]: 
-            fig,ax = plt.subplots(1,1,figsize=(10,6))
+            fig,ax = plt.subplots(1,2,figsize=(15,6))
             for i,zbc in enumerate(self._survey.z_bin_centres):
-                ax.plot(self._survey.maglist,weights[i],label=f'z={zbc}')
+                ax[0].plot(self._survey.maglist,weights[i],label=f'z={zbc}')
 
-            ax.legend(loc=2,fontsize=15)
-            #plt.xlim(mmin,mmax)
-            ax.set_xlabel(r'$r$',fontsize=15)
-            ax.set_ylabel(r'$w(m)$',fontsize=15)
-            ax.set_yscale('linear')
+            ax[0].legend(loc=2,fontsize=15)
+            ax[0].set_xlabel(r'$r$',fontsize=15)
+            ax[0].set_ylabel(r'$w(m)$',fontsize=15)
+            ax[0].set_yscale('linear')
             
+            weights_z = weights[:,-1]
+            ax[1].plot(zbins,weights_z)
+            ax[1].set_xlabel(r'$z$',fontsize=15)
+            ax[1].set_ylabel(r'$w(z)$',fontsize=15)
+
             self.fig = fig
 
 

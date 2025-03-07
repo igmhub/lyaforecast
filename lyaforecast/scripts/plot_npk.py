@@ -10,9 +10,9 @@ def main():
 
     plotter = Plots(forecast=forecast)
 
-    p3d_z_k_mu,p3d_var_z_k_mu,n_pk_z, z_bin_centres = forecast.compute_pk()
+    z_bin_centres,_,_,n_pk_z_lya,n_pk_z_qso = forecast.compute_pk()
 
-    plotter.plot_n_pk_z(n_pk_z,z_bin_centres)
+    plotter.plot_n_pk_z(z_bin_centres,n_pk_z_lya,n_pk_z_qso)
 
     plotter.fig.savefig(forecast.out_folder.joinpath('nP.png'))
 

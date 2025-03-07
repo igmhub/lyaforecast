@@ -8,7 +8,7 @@ def main():
 
     forecast = Forecast(args.config)
 
-    plotter = Plots(forecast.config,forecast.survey)
+    plotter = Plots(forecast)
 
     volume,z_bin_centres = forecast.compute_survey_volume()
 

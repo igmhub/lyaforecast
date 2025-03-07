@@ -8,11 +8,11 @@ def main():
 
     forecast = Forecast(args.config)
 
-    plotter = Plots(forecast.config,forecast.survey)
+    plotter = Plots(forecast)
 
-    weights = forecast.compute_weights()
+    weights,z_bins = forecast.compute_weights()
 
-    plotter.plot_weights(weights)
+    plotter.plot_weights(weights,z_bins)
 
     plotter.fig.savefig(forecast.out_folder.joinpath('weights.png'))
 

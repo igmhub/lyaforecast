@@ -3,7 +3,11 @@ import numpy as np
 class AnalyticBias:
     """Class to store analytic formulae for biases of Lya P3D, including non-linear corrections.
         These will later be handled by ForestFlow, currently parameter values are out-of-date."""
-    POWER_OPTIONS = ['lya','qso','lyaqso']
+    POWER_OPTIONS = ['lya','qso']
+
+    def __init__(self,cosmo):
+        self._cosmo = cosmo
+        self._growth_rate = self._cosmo.growth_rate
 
     def _get_non_linear_corr(self,k_hMpc):
         """Non-linear correction"""
@@ -36,8 +40,8 @@ class AnalyticBias:
             bias_zref = -0.1078
             zref = 2.33
         elif which=='qso':
-            alpha = 2.9
-            bias_zref = -0.1078
+            alpha = 1.44
+            bias_zref = 3.4
             zref = 2.33
         else:
             raise ValueError(f'invalid biasing: {which}, select from: {self.POWER_OPTIONS}')
@@ -49,8 +53,12 @@ class AnalyticBias:
         values from DESI Collaboration et al., 2024b"""
         if which=='lya':
             alpha = 0.0
-            beta_zref = 1.743
             zref = 2.33
+            beta_zref = 1.743
+        elif which=='qso':
+            alpha = 0.0
+            zref = 2.33
+            beta_zref = self._growth_rate/self._get_density_bias(zref,which)
         else:
             raise ValueError(f'invalid biasing: {which}, select from: {self.POWER_OPTIONS}')
         
@@ -78,9 +86,15 @@ class AnalyticBias:
             Values are cosmology dependent, but we ignore it here.
             If linear=True, return only Kaiser.
             Wavenumbers in h/Mpc. """
-        b_delta = self._get_density_bias(z,which)
-        beta = self._get_beta_rsd(z,which)
-        kaiser = (b_delta * (1 + beta * mu**2))**2
+        if which=='lyaqso':
+            b = self._get_density_bias(z,'lya') * self._get_density_bias(z,'qso')
+            rsd = (1 + self._get_beta_rsd(z,'lya') * mu**2) * (1 + self._get_beta_rsd(z,'qso') * mu**2)
+            kaiser = b * rsd    
+        else:
+            b = self._get_density_bias(z,which)
+            rsd = self._get_beta_rsd(z,which)
+            kaiser = (b * (1 + rsd * mu**2))**2        
+
         if linear:
             return kaiser
         else:
