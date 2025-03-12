@@ -92,7 +92,7 @@ class Spectrograph:
             self._snr_mat[i,:,:] = pixel_snr_mag.T
             
         #smooth rather noisy matrix
-        sigma_smooth = 100
+        sigma_smooth = 10
         self._snr_mat = gaussian_filter1d(self._snr_mat,sigma_smooth,axis=2)
             
 
@@ -215,6 +215,7 @@ class Spectrograph:
 
         return 1 / snr
 
+    #TO-DO, if which = qso, do not include pix width smoothing
     def smooth_kernel_kms(self,pix_kms,res_kms,k_kms):
         """Convolution kernel for the field (square this for power),
             including both pixelization and resolution"""
@@ -223,6 +224,7 @@ class Spectrograph:
         x = 0.5 * k_kms * pix_kms
         pixel_kernel = np.sin(x) / x
         gauss_kernel = np.exp(-0.5 * k_kms**2 * res_kms**2)
+
         return pixel_kernel * gauss_kernel
     
     def get_snr_per_ang(self,mag,zq,lam):

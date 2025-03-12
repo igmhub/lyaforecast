@@ -17,11 +17,10 @@ class Plots:
         if forecast is not None:
             self._survey = forecast.survey
             self._covariance = forecast.covariance
+            self._power_spec = forecast.power_spec
 
         if data is not None:
             self._data = data
-            self.p3d = self._data['p3d_z']
-            self.var_p3d = self._data['p3d_var_z']
 
     def plot_da_h_m(self):
         ap = self._data['ap_err_m'] * 100
@@ -44,8 +43,12 @@ class Plots:
             self.fig = fig
 
     def plot_da_h_z(self):
-        ap = self._data['ap_err_z'] * 100
-        at = self._data['at_err_z'] * 100
+        ap_lya = self._data['ap_err_lya_z'] * 100
+        at_lya = self._data['at_err_lya_z'] * 100
+        ap_qso = self._data['ap_err_qso_z'] * 100
+        at_qso = self._data['at_err_qso_z'] * 100
+        ap_cross = self._data['ap_err_cross_z'] * 100
+        at_cross = self._data['at_err_cross_z'] * 100
         zs = self._data['redshifts']
 
         zs_desi_sci = [2.12,2.28,2.43,2.59,2.75,2.91,3.07,3.23,3.39,3.55]
@@ -58,15 +61,23 @@ class Plots:
 
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,1,figsize=(10,6))
-            #ax.plot(mags[1:],ap[1:]/ap[:-1],label=fr'$\alpha_\parallel$')
-            ax.plot(zs,ap,label=fr'$\alpha_\parallel forecast$')
-            ax.plot(zs,at,label=fr'$\alpha_\perp forecast$',linestyle='dashed')
+
+            ax.plot(zs,ap_lya,label=fr'$\alpha_{{\parallel,\rm Ly\alpha}}$')
+            ax.plot(zs,at_lya,label=fr'$\alpha_{{\perp,\rm Ly\alpha}}$',linestyle='dashed')
+
+            #ax.plot(zs,ap_qso,label=fr'$\alpha_{{\parallel,\rm qso}}$')
+            #ax.plot(zs,at_qso,label=fr'$\alpha_{{\perp,\rm qso}}$',linestyle='dashed')
+
+            # ax.plot(zs,ap_cross,label=fr'$\alpha_{{\parallel,\rm cross}}$')
+            # ax.plot(zs,at_cross,label=fr'$\alpha_{{\perp,\rm cross}}$',linestyle='dashed')
+
             ax.scatter(zs_desi_sv,ap_desi_sv,
                        label=fr'$\alpha_\parallel$ DESI SV',color='red',
                        marker='.',alpha=0.5)
             ax.scatter(zs_desi_sv,at_desi_sv,
                        label=fr'$\alpha_\perp$ DESI SV',color='blue',
                        marker='x',alpha=0.5)
+            
             ax.set_xlabel(fr'$z$')
             ax.set_ylabel(f'% error')
             #ax.set_xlim(19,23)
@@ -76,54 +87,119 @@ class Plots:
             ax.set_yscale('linear')
             self.fig = fig
 
-    def plot_pk_z(self,p3d_z_k_mu,var_z_k_mu,z_bins):
+    def plot_pk_z(self,z_bins,info):
+
+        p_lya = info['p_lya']
+        p_qso = info['p_qso']
+        var_lya = info['var_lya']
+        var_qso = info['var_qso']
+
         mu_ind = 5
-        mu_val = round(self._covariance.mu[mu_ind],2)
+        mu_val = round(self._power_spec.mu[mu_ind],2)
         with self._make_style()[0], self._make_style()[1]: 
-            fig,ax = plt.subplots(1,1,figsize=(10,6))
-            ax.set_xlabel(fr'k')
-            ax.set_ylabel(fr'$kP(k,\mu={mu_val})/\pi$')
-            #ax.set_xlim(0.03,0.3)
-            ax.autoscale(axis='y')
-            ax.grid()
-            ax.set_yscale('linear')
-            for j,p_k_mu in enumerate(p3d_z_k_mu[:-5,:,:]):
-                ax.errorbar(self._covariance.k,
-                        self._covariance.k * p_k_mu[:,mu_ind] / np.pi,
-                        yerr= self._covariance.k * var_z_k_mu[j,:,mu_ind] / np.pi,
+            fig,ax = plt.subplots(1,2,figsize=(17,6))
+
+            for j,p_k_mu in enumerate(p_lya[:1,:,:]):
+                ax[0].errorbar(self._power_spec.k,
+                        self._power_spec.k * p_k_mu[:,mu_ind] / np.pi,
+                        yerr= 0,#self._power_spec.k * var_lya[j,:,mu_ind] / np.pi,
                         label=f'z = {z_bins[j]}',
                         alpha=0.3)
-            ax.legend()
+                ax[1].errorbar(self._power_spec.k,
+                        self._power_spec.k * p_qso[j,:,mu_ind] / np.pi,
+                        yerr= 0,#self._power_spec.k * var_qso[j,:,mu_ind] / np.pi,
+                        label=f'z = {z_bins[j]}',
+                        alpha=0.3)
+                
+            ax[1].legend()
+            
+            ax[0].set_xlabel(fr'k')
+            ax[1].set_xlabel(fr'k')
+            ax[0].set_ylabel(fr'$kP(k,\mu={mu_val})/\pi$')
+            ax[0].grid()
+            ax[1].grid()
+            ax[0].set_yscale('linear')
+            ax[1].set_yscale('linear')
+            ax[0].set_title(r'Ly$\alpha$')
+            ax[1].set_title(r'Quasar')
             
             self.fig = fig
 
-    def plot_var_pk_z(self,var_z_k_mu,z_bins):
+    def plot_var_pk_z(self,z_bins,info):
+
+        var_lya = info['var_lya']
+        var_qso = info['var_qso']
+        p_lya = info['p_lya']
+        p_qso = info['p_qso']
+
         mu_ind = 5
-        mu_val = round(self._covariance.mu[mu_ind],2)
-        with self._make_style()[0], self._make_style()[1]:
-            fig,ax = plt.subplots(1,1,figsize=(10,6))
-            ax.set_xlabel(fr'k [$h$/Mpc]')
-            ax.set_ylabel(fr'$\sigma_P(k,\mu = {mu_val})$')
-            ax.grid()
-            ax.set_yscale('log')
-            for j,var_k_mu in enumerate(var_z_k_mu[:-5,:,:]):
-                ax.plot(self._covariance.k,
+        mu_val = round(self._power_spec.mu[mu_ind],2)
+        with self._make_style()[0], self._make_style()[1]: 
+            fig,ax = plt.subplots(2,2,figsize=(17,17))
+
+            for j,var_k_mu in enumerate(var_lya[:,:,:]):
+                ax[0,0].plot(self._power_spec.k,
                         var_k_mu[:,mu_ind],
                         label=f'z = {z_bins[j]}',
                         alpha=0.3)
-            ax.legend()
+                ax[0,1].plot(self._power_spec.k,
+                        var_qso[j,:,mu_ind],
+                        label=f'z = {z_bins[j]}',
+                        alpha=0.3)
+            
+            k_ind = 20
+            k_val = round(self._power_spec.k[k_ind],2)
+            for i in range(self._power_spec.mu.size):
+                ax[1,0].plot(z_bins,
+                        var_lya[:,k_ind,i],
+                        label=f'mu = {self._power_spec.mu[i]}',
+                        alpha=0.3)
+                ax[1,1].plot(z_bins,
+                        var_qso[:,k_ind,i],
+                        label=f'mu = {self._power_spec.mu[i]}',
+                        alpha=0.3)
+                
+            ax[0,1].legend()
+            ax[1,1].legend()
+            
+            ax[0,0].set_xlabel(fr'k')
+            ax[0,1].set_xlabel(fr'k')
+            ax[1,0].set_xlabel(fr'z')
+            ax[1,1].set_xlabel(fr'z')
+            ax[0,0].set_ylabel(fr'$\sigma_{{\rm P}}(k,\mu={mu_val})$')
+            ax[1,0].set_ylabel(fr'$\sigma_{{\rm P}}(k={k_val})$')
+
+            ax[0,0].grid()
+            ax[0,1].grid()
+            ax[1,0].grid()
+            ax[1,1].grid()
+
+            ax[0,0].set_yscale('log')
+            ax[0,1].set_yscale('log')
+            ax[1,0].set_yscale('log')
+            ax[1,1].set_yscale('log')
+
+            ax[0,0].set_title(r'Ly$\alpha$')
+            ax[0,1].set_title(r'Quasar')
             
             self.fig = fig
 
     def plot_n_pk_z(self,zbs,n_p3d_z_lya,n_p3d_z_qso):
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,1,figsize=(10,6))
+
+            desi_sv_z = [1.65,1.75,1.85,1.95,2.05]
+            desi_sv_np = [0.22,0.21,0.19,0.18,0.16]
+
+            ax.plot(zbs,n_p3d_z_lya,label='lya')
+            ax.plot(zbs,n_p3d_z_qso,label='qso')
+            ax.scatter(desi_sv_z,desi_sv_np,color='blue',
+                       marker='x',alpha=0.7,label=r'DESI SV')
+
             ax.set_xlabel(fr'z')
             ax.set_ylabel(r'$\overline{n}P(0.14,0.6)$')
             ax.grid()
             ax.set_yscale('linear')
-            ax.plot(zbs,n_p3d_z_lya,label='lya')
-            ax.plot(zbs,n_p3d_z_lya,label='qso')
             ax.legend()
             
             self.fig = fig
@@ -186,21 +262,13 @@ class Plots:
             ax[1].plot(desi_sv_z,qlf_dzddeg,label=r'Forecast')
             #ax[1].plot(z,qlf_dzddeg * dz,label=r'Forecast')
 
-            desi_sci_z = np.array([1.96,2.12,2.28,2.43,2.59,2.75,2.91,
-                          3.07,3.23,3.39,3.55,3.70,3.86,4.02])
-            desi_sci_points = np.array([82,69,53,43,37,31,26,21,16,13,9,7,5,3])
-
-
-
-            ax[1].scatter(desi_sci_z,desi_sci_points,color='black',
-                       marker='x',alpha=0.5,label=r'DESI sci')
-
             ax[1].scatter(desi_sv_z,desi_sv_points/(0.1),color='blue',
                        marker='x',alpha=0.7,label=r'DESI SV')
         
             ax[1].set_xlabel('z',fontsize=15)
             #ax[1].set_ylabel(r'$dN/dz$\rm{ddeg}^2$',fontsize=15)
             ax[1].set_ylabel(r'$dn/dz$',fontsize=15)
+            #ax[1].set_xlim(1.6,2.1)
             ax[1].grid()
             ax[1].legend()
 
@@ -228,8 +296,8 @@ class Plots:
             fig,ax = plt.subplots(1,1,figsize=(8,6))
             ax.plot(z_bin_centres,volume/1e9,label='Forecast')
 
-            z_desi_sv = [1.65,1.75,1.85,1.95,2.05]
-            points_desi_sv = [0.17,0.16,0.14,0.13,0.1]
+            z_desi_sv = [1.65,1.75,1.85]
+            points_desi_sv = [5.29,5.40,5.49]
 
             ax.scatter(z_desi_sv,points_desi_sv,
                        alpha=0.5,color='black',label='DESI SV')
@@ -256,6 +324,30 @@ class Plots:
             ax[1].plot(zbins,weights_z)
             ax[1].set_xlabel(r'$z$',fontsize=15)
             ax[1].set_ylabel(r'$w(z)$',fontsize=15)
+
+            self.fig = fig
+
+    def plot_veff(self,zbins,veff):
+        with self._make_style()[0], self._make_style()[1]: 
+            fig,ax = plt.subplots(1,2,figsize=(18,6))
+            for i,zbc in enumerate(self._survey.z_bin_centres):
+                ax[0].plot(self._survey.maglist,veff[i]/1e9,label=f'z={zbc}')
+
+            ax[0].legend(loc=2,fontsize=15)
+            ax[0].set_xlabel(r'$r$',fontsize=15)
+            ax[0].set_ylabel(r'$V_{\rm eff}(m)$',fontsize=15)
+            ax[0].set_yscale('linear')
+            
+            z_desi_sv = [1.65,1.75,1.85,1.95,2.05]
+            veff_desi_sv = [0.17,0.16,0.14,0.13,0.10]
+            veff_z = veff[:,-1]
+            ax[1].plot(zbins,veff_z/1e9,label='Forecast')
+            ax[1].scatter(z_desi_sv,veff_desi_sv,color='blue',
+                       marker='x',alpha=0.7,label=r'DESI SV')
+            ax[1].set_xlabel(r'$z$',fontsize=15)
+            #ax[1].set_ylabel(r'$V_{\rm eff} [h^{-3}Gpc^3]$',fontsize=15)
+            ax[1].set_ylabel(r'$V_{\rm eff} [deg^2kms^-1]$',fontsize=15)
+            ax[1].legend()
 
             self.fig = fig
 

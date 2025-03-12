@@ -10,13 +10,13 @@ def main():
 
     plotter = Plots(forecast=forecast)
 
-    z_bin_centres,p3d_z_k_mu,p3d_var_z_k_mu,_,_ = forecast.compute_pk()
+    z_bin_centres,info,_,_ = forecast.compute_pk()
 
-    plotter.plot_pk_z(p3d_z_k_mu,p3d_var_z_k_mu,z_bin_centres)
+    plotter.plot_pk_z(z_bin_centres,info)
 
     plotter.fig.savefig(forecast.out_folder.joinpath('pk_z.png'))
 
-    plotter.plot_var_pk_z(p3d_var_z_k_mu,z_bin_centres)
+    plotter.plot_var_pk_z(z_bin_centres,info)
 
     plotter.fig.savefig(forecast.out_folder.joinpath('var_pk_z.png'))
 

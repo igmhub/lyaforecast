@@ -12,15 +12,16 @@ class Survey:
         #survey conditions (not sure where to put these yet)
         self.area_deg2 = np.array(config['survey'].get('survey_area').split()).astype('float')[0]
         self.qso_density = np.array(config['survey'].get('qso density').split()).astype('float')[0]
-        # quasar redshift range
-        self.zq_min = config['survey'].getfloat('z_qso_min')
-        self.zq_max = config['survey'].getfloat('z_qso_max')
         # z bins to eval model
         self.zmin = config['survey'].getfloat('z bin min', 2)
         self.zmax = config['survey'].getfloat('z bin max', 4)
         self.num_z_bins = config['survey'].getint('num z bins', 1)
-        self._zlist = np.linspace(self.zmin, self.zmax, self.num_z_bins+1)
-        self.z_bin_centres = self._zlist[:-1] + np.diff(self._zlist)[0]/2
+        self._bin_space = np.linspace(self.zmin, self.zmax, self.num_z_bins+1)
+        self.z_bin_centres = self._bin_space[:-1] + np.diff(self._bin_space)[0]/2
+        # quasar redshift range and num bins for 3d density
+        self.zq_min = config['survey'].getfloat('z_qso_min')
+        self.zq_max = config['survey'].getfloat('z_qso_max')
+        self.nzq = config['survey'].getint('num qso bins')
         # magnitude range and nbins
         self.mag_min = config['survey'].getfloat('min_band_mag',16)
         self.mag_max = config['survey'].getfloat('max_band_mag',23)
@@ -96,10 +97,11 @@ class Survey:
 
             #clamp points to a minimum/maximum magnitude. It's kind of arbitrary right now.
             #Otherwise interpolator is a bit shit.
-            out_of_bounds_mu = np.where(y_query > 23)
-            out_of_bounds_ml = np.where(y_query < 17)
+            #removing this temporarily to use LBGs (much fainter)
+            # out_of_bounds_mu = np.where(y_query > 23)
+            # out_of_bounds_ml = np.where(y_query < 17)
             points = self._get_qso_lum_func(x_query, y_query, grid=False)
-            points[out_of_bounds_mu] = 1e-20
-            points[out_of_bounds_ml] = 1e-20
+            # points[out_of_bounds_mu] = 1e-20
+            # points[out_of_bounds_ml] = 1e-20
 
             return points

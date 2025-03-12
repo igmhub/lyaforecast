@@ -37,14 +37,22 @@ class PowerSpectrum:
         self.mu = mu_edges[:-1] + np.diff(mu_edges)/2     
         self.dmu = np.diff(mu_edges)[0]
 
-    def compute_linear_power_evol(self,z,k_hmpc,k_min,k_max):
+        # peak-only
+        self._bao_only = config['control'].getboolean('bao only')
+
+    def compute_linear_power_evol(self,z,k_hmpc):
         """Scale linear power, assuming EdS scale with redshift"""
         if z<1.8:
             #raise ValueError('Can not use EdS to go below z = 1.8')
             print('Warning, going below z = 1.8 with EdS power scaling')
         if self._cosmo.z_ref<1.8:
             raise ValueError('Can not have z_ref below 1.8, input:',self._cosmo.z_ref)
-        pk_zref = self._cosmo.get_pk_lin(k_hmpc,k_min,k_max)
+        
+        if self._bao_only:
+            pk_zref = self._cosmo.get_pk_lin_peak(k_hmpc)
+        else:
+            pk_zref = self._cosmo.get_pk_lin(k_hmpc,self._k_min_hmpc,self._k_max_hmpc)
+
         eds = ((1+self._cosmo.z_ref)/(1+z))**2
 
         return pk_zref * eds
@@ -92,7 +100,7 @@ class PowerSpectrum:
         k = np.fmax(k_hmpc,self._k_min_hmpc)
         k = np.fmin(k,self._k_max_hmpc)
         # compute redshift-evolved linear matter power spectrum
-        pk_zref = self.compute_linear_power_evol(z,k_hmpc,self._k_min_hmpc,self._k_max_hmpc)
+        pk_zref = self.compute_linear_power_evol(z,k_hmpc)
         # get flux scale-dependent biasing (or only linear term)
         b = self.bias.compute_bias(z,k,mu,self._linear,which)
 

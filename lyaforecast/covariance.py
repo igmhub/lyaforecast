@@ -41,6 +41,8 @@ class Covariance:
         self._get_pix_kms()
         #get resolution in kms (for mean wavelength)
         self._get_res_kms()
+        #get redshift limits of bins
+        self._get_redshift_limits()
 
     def _get_pix_kms(self):
         #get pix width in kms, whether angstrom or km/s is provided.
@@ -76,17 +78,26 @@ class Covariance:
 
     def _mean_z(self):
         """ given wavelength range covered in bin, compute central redshift"""
+
         return np.sqrt(self.lmin * self.lmax) / self._cosmo.LYA_REST - 1.0
 
     def _get_redshift_depth(self):
         """Depth of redshift bin, in km/s"""
+
         c_kms = self._cosmo.SPEED_LIGHT
         L_kms = c_kms*np.log(self.lmax/self.lmin)
 
         return L_kms
+    
+    def _get_redshift_limits(self):
+        """Redshift limits of bin, computed after calling class instance with lmin, lmax."""
+
+        self._zmin = self.lmin / self._cosmo.LYA_REST - 1
+        self._zmax = self.lmax / self._cosmo.LYA_REST - 1
 
     def _get_forest_length(self):
         """Length of Lya forest, in km/s"""
+
         c_kms = self._cosmo.SPEED_LIGHT
         lmax_forest = self._survey.lrmax * (1 + self._zq)
         lmin_forest = self._survey.lrmin * (1 + self._zq)
@@ -100,12 +111,14 @@ class Covariance:
         return Lq_kms
     
     def _get_forest_wave(self):
+
         lmax_forest = self._survey.lrmax * (1 + self._zq)
         lmin_forest = self._survey.lrmin * (1 + self._zq)
         nbins = int((lmax_forest - lmin_forest) / self._survey.pix_ang)
         self._forest_wave = np.linspace(lmin_forest,lmax_forest,nbins)
 
     def get_survey_volume(self):
+        
         z = self._mean_z()
         dkms_dhmpc = self._cosmo.velocity_from_distance(z)
         dhmpc_ddeg = self._cosmo.distance_from_degrees(z)
@@ -141,19 +154,22 @@ class Covariance:
         # weights instance
         self.weights = Weights(self._config,self._survey,self._cosmo,self._power_spec,self._spectrograph,
                                forest_length,pixel_length,resolution,lambda_mean,
-                               z_centre,z_qso)
+                               z_centre,z_qso,self._zmin,self._zmax)
 
-        w = self.weights.compute_weights()
+        w_lya = self.weights.compute_weights()
+        self._w_lya = w_lya
 
         # given weights, compute integrals in McDonald & Eisenstein (2007)
-        int_1 = self.weights.compute_int_1(w)
-        int_2 = self.weights.compute_int_2(w)
-        int_3 = self.weights.compute_int_3(w)
+        int_1 = self.weights.compute_int_1(w_lya)
+        int_2 = self.weights.compute_int_2(w_lya)
+        int_3 = self.weights.compute_int_3(w_lya)
 
         # Pw2D in McDonald & Eisenstein (2007)
         self._aliasing_weights = int_2 / (int_1**2 * forest_length)
         # PNeff in McDonald & Eisenstein (2007)
         self._effective_noise_power = int_3 * pixel_length / (int_1**2 * forest_length)
+        # quasar shot noise (deg^2 km/s)
+        self._qso_noise_power = 1 / self.weights.compute_weights(which='qso')
 
     def _compute_total_lya_power(self,z,kt_deg,kp_kms):
         """Sum of 3D Lya power, aliasing and effective noise power"""
@@ -193,12 +209,9 @@ class Covariance:
         total_power_degkms = self._compute_total_lya_power(z,kt_deg,kp_kms)
         # convert into units of (Mpc/h)^3
         total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dmpch
-        # survey volume in units of (Mpc/h)^3
-        volume_degkms = self._survey.area_deg2 * self._get_redshift_depth()
-        volume_mpch = volume_degkms * dhmpc_ddeg**2 / dkms_dmpch
         # based on Eq 8 in Seo & Eisenstein (2003), but note that here we
         # use 0 < mu < 1 and they used -1 < mu < 1
-        num_modes = volume_mpch * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / 4 * np.pi**2
+        num_modes = self.get_survey_volume() * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / 4 * np.pi**2
         power_variance = 2 * total_power_hmpc**2 / num_modes
 
         #If not per magnitude, return power var for mmax only. 
@@ -223,69 +236,73 @@ class Covariance:
         kp_kms = kp_hmpc / dkms_dmpch
         kt_deg = kt_hmpc * dhmpc_ddeg
                 
-        total_power_lya_degkms = self._compute_total_lya_power(kt_deg,kp_kms)
-        noise_lya = total_power_lya_degkms - self._compute_p3d_kms(kt_deg,kp_kms)
-        np_lya = self._compute_p3d_kms(kt_deg,kp_kms) / noise_lya[-1]
+        total_power_lya_degkms = self._compute_total_lya_power(z,kt_deg,kp_kms)
+        noise_lya = total_power_lya_degkms - self._power_spec.compute_p3d_kms(z,kt_deg,kp_kms,
+                                                                              self._res_kms
+                                                                              ,self._pix_kms,'lya')
+        np_lya = self._power_spec.compute_p3d_kms(z,kt_deg,kp_kms,self._res_kms
+                                                  ,self._pix_kms,'lya') / noise_lya[-1]
 
-        total_power_qso_degkms = self._compute_total_qso_power(k,mu)
-        noise_qso = total_power_qso_degkms - self._compute_p3d_kms(kt_deg,kp_kms,which='qso')
-        np_qso = self._compute_p3d_kms(kt_deg,kp_kms,which='qso') / noise_qso[-1]
+
+        # quasars
+        p3d_qso = self._power_spec.compute_p3d_kms(z,kt_deg,kp_kms,self._res_kms
+                                                  ,self._pix_kms,'qso')
+        np_qso = p3d_qso / self._qso_noise_power[-1]
         
         return np_lya,np_qso
 
-
-
-
-
-
-
-
-
-    def _compute_total_qso_power(self,k_hmpc,mu):
-        """The 3D power spectrum of galaxies, computed in h/Mpc"""
-        z = self._mean_z()
-        # decompose into line of sight and transverse components
-        kp_hmpc = k_hmpc * mu
-        kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
-        # transform from comoving to observed coordinates
-        kp_kms = kp_hmpc / self._cosmo.velocity_from_distance(z)
-        kt_deg = kt_hmpc * self._cosmo.distance_from_degrees(z)
-        # compute power in h/Mpc (from power_spectrum module)
-        p3d_qso = self._compute_p3d_kms(kt_deg,kp_kms,which='qso')
+    def compute_qso_power_variance(self,k_hmpc,mu):
+        """The squared fractional error on the 3D bandpower of quasars, computed in h/Mpc.
+            The result is the denominator of the fisher matrix calculation."""
         
-        #I will have to do this eventually with different weights I think.
-        weights = self.compute_weights(which='qso')
-        #something like this, but np eff will be different (3D), and maybe the weights too? 
-        # (without the pixel variance)
-        noise_power = 1. / self.get_np_eff(weights)
+        z = self._mean_z()
 
-        return p3d_qso + noise_power
-        #compute weights
-        #computer covariance
+        vol_element = k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / 4 * np.pi**2
+        eff_vol = self._compute_qso_eff_vol(k_hmpc,mu)
+        p3d = self._power_spec.compute_p3d_hmpc_smooth(z, k_hmpc,
+                                        mu, self._pix_kms, self._res_kms, 'qso') 
 
-    def compute_qso_auto_power_variance(self,k_hmpc):
+        power_variance =  p3d**2 / (eff_vol * vol_element)
+        
+        if not self.per_mag:
+            power_variance = power_variance[-1]
+        
+        return power_variance
 
+    def _compute_qso_eff_vol(self,k_hmpc,mu):
+
+        z = self._mean_z()
         #compute weights
         #computer covariance
         dkms_dmpch = self._cosmo.velocity_from_distance(z)
         dhmpc_ddeg = self._cosmo.distance_from_degrees(z)
 
+        # decompose into line of sight and transverse components
+        kp_hmpc = k_hmpc * mu
+        kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
+        # transform from comoving to observed coordinates
+        kp_kms = kp_hmpc / dkms_dmpch
+        kt_deg = kt_hmpc * dhmpc_ddeg
+
         volume_degkms = self._survey.area_deg2 * self._get_redshift_depth()
-        volume_mpch = volume_degkms * dhmpc_ddeg**2 / dkms_dmpch
-        num_modes = volume_mpch * k_hmpc**2 * self.dk * self.dmu / 4 * np.pi**2
+        volume_hmpc = volume_degkms * dhmpc_ddeg**2 / dkms_dmpch
 
-        return
-    
-    def compute_lya_qso_cross_p3d(self,k_hmpc,mu):
+        # compute power in h/Mpc (from power_spectrum module)
+        # p3d_qso = self._power_spec.compute_p3d_hmpc_smooth(z,k_hmpc,mu,
+        #                                                 self._pix_kms, 
+        #                                                 self._res_kms,'qso')
         
-        p3d_lya_qso = self._power_spec.compute_p3d_hmpc(z,k_hmpc,mu,
-                                                  self._k_min_hmpc,
-                                                  self._k_max_hmpc,
-                                                  self._linear,
-                                                  which='lyaqso')
-        
-        #not sure
+        # compute power in km/s
+        p3d_qso = self._power_spec.compute_p3d_kms(z,kt_deg,kp_kms,self._res_kms
+                                                  ,self._pix_kms,'qso')
 
+        # We assume weights module is initialised.
+        #per (deg^2 km/s)
+        dn_dz = self.weights.compute_weights(which='qso')
+        #in h/Mpc^3
+        eff_vol = volume_hmpc * (p3d_qso / (p3d_qso + 1 / dn_dz))**2
+
+        return eff_vol
     
     def compute_cross_power_variance(self,k_hmpc,mu
                         ):
@@ -293,6 +310,28 @@ class Covariance:
             From eq.34 of McQuinn and White (2011).
             Note that here -1 < mu < 1.
            """
-        
-        return 
+        z = self._mean_z()
+        # decompose into line of sight and transverse components
+        dkms_dmpch = self._cosmo.velocity_from_distance(z)
+        dhmpc_ddeg = self._cosmo.distance_from_degrees(z)
+        kp_hmpc = k_hmpc * mu
+        kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
+        kp_kms = kp_hmpc / dkms_dmpch
+        kt_deg = kt_hmpc * dhmpc_ddeg
+
+        cross = self._power_spec.compute_p3d_hmpc(z,k_hmpc,mu,which='lyaqso')
+        qso_auto = self._power_spec.compute_p3d_hmpc(z,k_hmpc,mu,which='qso')
+        total_power_lya = self._compute_total_lya_power(z,kt_deg,kp_kms)
+        dn_dz_qso = self.weights.compute_weights(which='qso') #in reality dn/ddeg2dkm/s
+
+        var_p_cross = cross**2 + total_power_lya * (qso_auto**2 + 1 / dn_dz_qso)
+
+        # survey volume in units of (Mpc/h)^3
+        volume_degkms = self._survey.area_deg2 * self._get_redshift_depth()
+        volume_mpch = volume_degkms * dhmpc_ddeg**2 / dkms_dmpch
+        # based on Eq 8 in Seo & Eisenstein (2003), but note that here we
+        # use 0 < mu < 1 and they used -1 < mu < 1
+        num_modes = volume_mpch * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / 4 * np.pi**2
+
+        return var_p_cross / num_modes
 

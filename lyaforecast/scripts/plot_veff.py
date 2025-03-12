@@ -3,6 +3,8 @@ import argparse
 from lyaforecast import Forecast
 from lyaforecast.plots import Plots
 
+"""Plot effective volume for point tracers."""
+
 def main():
     args = get_args()
 
@@ -10,11 +12,11 @@ def main():
 
     plotter = Plots(forecast)
 
-    weights,z_bins = forecast.compute_weights()
+    zbs,_,veff = forecast.compute_weights()
 
-    plotter.plot_weights(weights,z_bins)
+    plotter.plot_veff(zbs,veff)
 
-    plotter.fig.savefig(forecast.out_folder.joinpath('weights.png'))
+    plotter.fig.savefig(forecast.out_folder.joinpath('vol_eff.png'))
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
