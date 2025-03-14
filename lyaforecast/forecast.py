@@ -421,11 +421,19 @@ class Forecast:
             sigma_dh_combined_m = None
             sigma_da_combined = 1./np.sqrt(np.sum(1./sigma_da_lya**2))
             sigma_dh_combined = 1./np.sqrt(np.sum(1./sigma_dh_lya**2))
+            sigma_da_combined_qso = 1./np.sqrt(np.sum(1./sigma_da_qso**2))
+            sigma_dh_combined_qso = 1./np.sqrt(np.sum(1./sigma_dh_qso**2))
+            sigma_da_combined_cross = 1./np.sqrt(np.sum(1./sigma_da_cross**2))
+            sigma_dh_combined_cross = 1./np.sqrt(np.sum(1./sigma_dh_cross**2))
 
         #these aren't log-spaced right?
 
-        print(f'\n Combined: sigma_log_da={sigma_da_combined}'
-                    f', sigma_log_dh={sigma_dh_combined}')
+        print(f'\n Combined: sigma_da={sigma_da_combined}'
+                    f', sigma_dh={sigma_dh_combined}')
+        print(f'\n Combined: sigma_da_qso={sigma_da_combined_qso}'
+                    f', sigma_dh_qso={sigma_dh_combined_qso}')
+        print(f'\n Combined: sigma_da_cross={sigma_da_combined_cross}'
+                    f', sigma_dh_cross={sigma_dh_combined_cross}')
        
         data = {}
         data["redshifts"] = z_bin_centres

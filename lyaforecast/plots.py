@@ -62,11 +62,11 @@ class Plots:
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,1,figsize=(10,6))
 
-            ax.plot(zs,ap_lya,label=fr'$\alpha_{{\parallel,\rm Ly\alpha}}$')
-            ax.plot(zs,at_lya,label=fr'$\alpha_{{\perp,\rm Ly\alpha}}$',linestyle='dashed')
+            ax.plot(zs,ap_lya,label=fr'$\alpha_{{\parallel,\rm Ly\alpha}}$',alpha=0.5)
+            ax.plot(zs,at_lya,label=fr'$\alpha_{{\perp,\rm Ly\alpha}}$',linestyle='dashed',alpha=0.5)
 
-            #ax.plot(zs,ap_qso,label=fr'$\alpha_{{\parallel,\rm qso}}$')
-            #ax.plot(zs,at_qso,label=fr'$\alpha_{{\perp,\rm qso}}$',linestyle='dashed')
+            ax.plot(zs,ap_qso,label=fr'$\alpha_{{\parallel,\rm qso}}$',alpha=0.5)
+            ax.plot(zs,at_qso,label=fr'$\alpha_{{\perp,\rm qso}}$',linestyle='dashed',alpha=0.5)
 
             # ax.plot(zs,ap_cross,label=fr'$\alpha_{{\parallel,\rm cross}}$')
             # ax.plot(zs,at_cross,label=fr'$\alpha_{{\perp,\rm cross}}$',linestyle='dashed')

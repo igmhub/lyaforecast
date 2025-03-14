@@ -103,10 +103,10 @@ class Covariance:
         lmin_forest = self._survey.lrmin * (1 + self._zq)
 
         #this ensures the forest limits cannot be out of the defined bin.
-        lminf = np.fmax(lmin_forest,self.lmin)
-        lmaxf = np.fmin(lmax_forest,self.lmax)
+        #lmin_forest = np.fmax(lmin_forest,self.lmin)
+        #lmax_forest = np.fmin(lmax_forest,self.lmax)
 
-        Lq_kms = c_kms*np.log(lmaxf/lminf)
+        Lq_kms = c_kms*np.log(lmax_forest/lmin_forest)
 
         return Lq_kms
     
@@ -172,7 +172,7 @@ class Covariance:
         self._qso_noise_power = 1 / self.weights.compute_weights(which='qso')
 
     def _compute_total_lya_power(self,z,kt_deg,kp_kms):
-        """Sum of 3D Lya power, aliasing and effective noise power"""
+        """Sum of 3D Lya power, aliasing and effective noise power in deg2kms"""
         # previously computed p2wd and pn_eff.
         p3d = self._power_spec.compute_p3d_kms(z,kt_deg,kp_kms,self._res_kms,self._pix_kms,'lya')
         aliasing = self._aliasing_weights * self._power_spec.compute_p1d_kms(z,kp_kms,self._res_kms,self._pix_kms)
@@ -209,9 +209,11 @@ class Covariance:
         total_power_degkms = self._compute_total_lya_power(z,kt_deg,kp_kms)
         # convert into units of (Mpc/h)^3
         total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dmpch
+        #survey volume
+        vol_hmpc = self.get_survey_volume()
         # based on Eq 8 in Seo & Eisenstein (2003), but note that here we
         # use 0 < mu < 1 and they used -1 < mu < 1
-        num_modes = self.get_survey_volume() * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / 4 * np.pi**2
+        num_modes = vol_hmpc * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / (2 * np.pi**2)
         power_variance = 2 * total_power_hmpc**2 / num_modes
 
         #If not per magnitude, return power var for mmax only. 
@@ -257,7 +259,7 @@ class Covariance:
         
         z = self._mean_z()
 
-        vol_element = k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / 4 * np.pi**2
+        vol_element = k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / (2 * np.pi**2)
         eff_vol = self._compute_qso_eff_vol(k_hmpc,mu)
         p3d = self._power_spec.compute_p3d_hmpc_smooth(z, k_hmpc,
                                         mu, self._pix_kms, self._res_kms, 'qso') 
@@ -312,26 +314,32 @@ class Covariance:
            """
         z = self._mean_z()
         # decompose into line of sight and transverse components
-        dkms_dmpch = self._cosmo.velocity_from_distance(z)
+        dkms_dhmpc = self._cosmo.velocity_from_distance(z)
         dhmpc_ddeg = self._cosmo.distance_from_degrees(z)
         kp_hmpc = k_hmpc * mu
         kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
-        kp_kms = kp_hmpc / dkms_dmpch
+        kp_kms = kp_hmpc / dkms_dhmpc
         kt_deg = kt_hmpc * dhmpc_ddeg
 
         cross = self._power_spec.compute_p3d_hmpc(z,k_hmpc,mu,which='lyaqso')
         qso_auto = self._power_spec.compute_p3d_hmpc(z,k_hmpc,mu,which='qso')
         total_power_lya = self._compute_total_lya_power(z,kt_deg,kp_kms)
-        dn_dz_qso = self.weights.compute_weights(which='qso') #in reality dn/ddeg2dkm/s
+        total_power_lya_hmpc = total_power_lya * dhmpc_ddeg**2 / dkms_dhmpc
+        
+        #dn/ddeg2dkm/s to dn/dhmpc^3
+        dn_dkmsddeg2_qso = self.weights.compute_weights(which='qso')
+        dn_dhmpc3 = dn_dkmsddeg2_qso / dhmpc_ddeg**2 * dkms_dhmpc
 
-        var_p_cross = cross**2 + total_power_lya * (qso_auto**2 + 1 / dn_dz_qso)
-
+        var_p_cross = cross**2 + total_power_lya_hmpc * (qso_auto + 1 / dn_dhmpc3)
         # survey volume in units of (Mpc/h)^3
-        volume_degkms = self._survey.area_deg2 * self._get_redshift_depth()
-        volume_mpch = volume_degkms * dhmpc_ddeg**2 / dkms_dmpch
+        volume_mpch = self.get_survey_volume()
         # based on Eq 8 in Seo & Eisenstein (2003), but note that here we
         # use 0 < mu < 1 and they used -1 < mu < 1
-        num_modes = volume_mpch * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / 4 * np.pi**2
+        num_modes = volume_mpch * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / (2 * np.pi**2)
 
-        return var_p_cross / num_modes
+        power_var = var_p_cross / num_modes
+        if not self.per_mag:
+            power_var = power_var[-1]
+
+        return power_var
 

@@ -34,7 +34,6 @@ class AnalyticBias:
     def _get_density_bias(self,z,which):
         """Linear density bias as a function of redshift, 
             values from DESI Collaboration et al., 2024b"""
-        #alpha=1.25
         if which=='lya':
             alpha = 2.9
             bias_zref = -0.1078

@@ -108,10 +108,7 @@ class Weights:
         zlist = np.linspace(self._zmin,self._zmax,self._survey.nzq)
         dz = zlist[1] - zlist[0]
         mags = self._survey.maglist
-        #qso density / deg^2 (m)
-        # dn_dzdm = np.zeros_like(mags)
-        # for z in zlist:
-        #      dn_dzdm += self._survey.get_qso_lum_func(z,mags) * dz
+        
         dn_dzdm = self._survey.get_qso_lum_func(self._z_bin,mags)
         dkms_dz = self._cosmo.SPEED_LIGHT / (1 + self._z_bin)
         dn_dmdkms = dn_dzdm / dkms_dz
