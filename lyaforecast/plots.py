@@ -49,6 +49,8 @@ class Plots:
         at_qso = self._data['at_err_qso_z'] * 100
         ap_cross = self._data['ap_err_cross_z'] * 100
         at_cross = self._data['at_err_cross_z'] * 100
+        ap_comb = self._data['ap_err_comb_z'] * 100
+        at_comb = self._data['at_err_comb_z'] * 100
         zs = self._data['redshifts']
 
         zs_desi_sci = [2.12,2.28,2.43,2.59,2.75,2.91,3.07,3.23,3.39,3.55]
@@ -60,31 +62,44 @@ class Plots:
         at_desi_sv = [2.02,2.14,2.33,2.56,2.9,3.38,3.95,4.69,5.59,6.73,8.47,10.73,14.48,19.92]
 
         with self._make_style()[0], self._make_style()[1]: 
-            fig,ax = plt.subplots(1,1,figsize=(10,6))
+            fig,ax = plt.subplots(1,2,figsize=(20,6))
 
-            ax.plot(zs,ap_lya,label=fr'$\alpha_{{\parallel,\rm Ly\alpha}}$',alpha=0.5)
-            ax.plot(zs,at_lya,label=fr'$\alpha_{{\perp,\rm Ly\alpha}}$',linestyle='dashed',alpha=0.5)
+            ax[0].plot(zs,ap_lya,label=fr'$\alpha_{{\parallel,\rm Ly\alpha}}$',alpha=0.5,color='blue')
+            ax[0].plot(zs,at_lya,label=fr'$\alpha_{{\perp,\rm Ly\alpha}}$',linestyle='dashed',alpha=0.5,color='blue')
 
-            ax.plot(zs,ap_qso,label=fr'$\alpha_{{\parallel,\rm qso}}$',alpha=0.5)
-            ax.plot(zs,at_qso,label=fr'$\alpha_{{\perp,\rm qso}}$',linestyle='dashed',alpha=0.5)
+            ax[0].plot(zs,ap_qso,label=fr'$\alpha_{{\parallel,\rm qso}}$',alpha=0.5,color='red')
+            ax[0].plot(zs,at_qso,label=fr'$\alpha_{{\perp,\rm qso}}$',linestyle='dashed',alpha=0.5,color='red')
 
-            # ax.plot(zs,ap_cross,label=fr'$\alpha_{{\parallel,\rm cross}}$')
-            # ax.plot(zs,at_cross,label=fr'$\alpha_{{\perp,\rm cross}}$',linestyle='dashed')
+            ax[0].plot(zs,ap_cross,label=fr'$\alpha_{{\parallel,\rm cross}}$',alpha=0.5,color='green')
+            ax[0].plot(zs,at_cross,label=fr'$\alpha_{{\perp,\rm cross}}$',linestyle='dashed',alpha=0.5,color='green')
 
-            ax.scatter(zs_desi_sv,ap_desi_sv,
-                       label=fr'$\alpha_\parallel$ DESI SV',color='red',
+            #combined lya auto and lya-qso cross.
+
+            ax[1].plot(zs,ap_comb,label=fr'$\alpha_{{\parallel}}$',alpha=0.5,color='darkblue')
+            ax[1].plot(zs,at_comb,label=fr'$\alpha_{{\perp}}$',linestyle='dashed',alpha=0.5,color='darkblue')
+
+            ax[1].scatter(zs_desi_sv,ap_desi_sv,
+                       label=fr'$\alpha_\parallel$ DESI SV',color='grey',
                        marker='.',alpha=0.5)
-            ax.scatter(zs_desi_sv,at_desi_sv,
-                       label=fr'$\alpha_\perp$ DESI SV',color='blue',
+            ax[1].scatter(zs_desi_sv,at_desi_sv,
+                       label=fr'$\alpha_\perp$ DESI SV',color='grey',
                        marker='x',alpha=0.5)
             
-            ax.set_xlabel(fr'$z$')
-            ax.set_ylabel(f'% error')
+            ax[0].set_xlabel(fr'$z$')
+            ax[1].set_xlabel(fr'$z$')
+            ax[0].set_ylabel(f'% error')
             #ax.set_xlim(19,23)
             #ax.set_ylim(0,5)
-            ax.legend()
-            ax.grid()
-            ax.set_yscale('linear')
+            ax[0].legend()
+            ax[0].grid()
+            ax[1].legend()
+            ax[1].grid()
+            ax[0].set_yscale('linear')
+            ax[1].set_ylim(0,3)
+
+            ax[0].set_title('Individual correlations')
+            ax[1].set_title('LyaxLya + LyaxQSO')
+
             self.fig = fig
 
     def plot_pk_z(self,z_bins,info):

@@ -284,6 +284,8 @@ class Forecast:
             sigma_dh_qso = np.zeros(self.survey.num_z_bins)
             sigma_da_cross = np.zeros(self.survey.num_z_bins)
             sigma_dh_cross = np.zeros(self.survey.num_z_bins)
+            sigma_da_lya_lya_lya_qso = np.zeros(self.survey.num_z_bins)
+            sigma_dh_lya_lya_lya_qso = np.zeros(self.survey.num_z_bins)
             corr_coef = np.zeros(self.survey.num_z_bins)
 
         use_z_bin_list = False
@@ -409,6 +411,10 @@ class Forecast:
 
             sigma_dh_cross[iz] = sigma_dh_cross_z
             sigma_da_cross[iz] = sigma_da_cross_z
+            
+
+            sigma_da_lya_lya_lya_qso[iz] = 1 / (1 / sigma_da_lya_z + 1 / sigma_da_cross_z)
+            sigma_dh_lya_lya_lya_qso[iz] = 1 / (1 / sigma_dh_lya_z + 1 / sigma_dh_cross_z)
         
         
         if self.covariance.per_mag:
@@ -425,6 +431,8 @@ class Forecast:
             sigma_dh_combined_qso = 1./np.sqrt(np.sum(1./sigma_dh_qso**2))
             sigma_da_combined_cross = 1./np.sqrt(np.sum(1./sigma_da_cross**2))
             sigma_dh_combined_cross = 1./np.sqrt(np.sum(1./sigma_dh_cross**2))
+            sigma_da_combined_comb = 1./np.sqrt(np.sum(1./sigma_da_lya_lya_lya_qso**2))
+            sigma_dh_combined_comb = 1./np.sqrt(np.sum(1./sigma_dh_lya_lya_lya_qso**2))
 
         #these aren't log-spaced right?
 
@@ -434,6 +442,8 @@ class Forecast:
                     f', sigma_dh_qso={sigma_dh_combined_qso}')
         print(f'\n Combined: sigma_da_cross={sigma_da_combined_cross}'
                     f', sigma_dh_cross={sigma_dh_combined_cross}')
+        print(f'\n Combined: sigma_da_comb={sigma_da_combined_comb}'
+                    f', sigma_dh_comb={sigma_dh_combined_comb}')
        
         data = {}
         data["redshifts"] = z_bin_centres
@@ -453,6 +463,8 @@ class Forecast:
         data['at_err_qso_z'] = sigma_da_qso
         data['ap_err_cross_z'] = sigma_dh_cross
         data['at_err_cross_z'] = sigma_da_cross
+        data['ap_err_comb_z'] = sigma_dh_lya_lya_lya_qso
+        data['at_err_comb_z'] = sigma_da_lya_lya_lya_qso
 
         if forecast is not None:
             #load data to plots instance
