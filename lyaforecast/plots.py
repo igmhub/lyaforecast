@@ -342,9 +342,19 @@ class Plots:
             ax[0].set_xlabel(r'$r$',fontsize=15)
             ax[0].set_ylabel(r'$w(m)$',fontsize=15)
             ax[0].set_yscale('linear')
+
+            wz_lya = weights['lya'].sum(axis=1)
+            w_tot_lya = np.sum(wz_lya)
+            z_eff_lya = np.sum(zbins * wz_lya)/w_tot_lya
+            print('Effective redshift of lya:',z_eff_lya)
+
+            wz_tr = weights['cross'].sum(axis=1)
+            w_tot_tr = np.sum(wz_tr)
+            z_eff_tr = np.sum(zbins * wz_tr)/w_tot_tr
+            print('Effective redshift of cross:',z_eff_tr)
             
-            ax[1].plot(zbins,weights['lya'][:,-1],label='lya')
-            ax[1].plot(zbins,weights['qso'][:,-1],label='qso')
+            ax[1].plot(zbins,wz_lya,label='lya')
+            ax[1].plot(zbins,wz_tr,label='cross')
             ax[1].set_xlabel(r'$z$',fontsize=15)
             ax[1].set_ylabel(r'$w(z)$',fontsize=15)
             ax[1].legend()

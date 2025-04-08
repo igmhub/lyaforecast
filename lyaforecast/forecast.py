@@ -4,7 +4,7 @@ import numpy as np
 import time 
 from pathlib import Path
 
-from lyaforecast.utils import get_file
+from lyaforecast.utils import get_file, get_pk_smooth
 from lyaforecast.cosmoCAMB import CosmoCamb
 from lyaforecast.spectrograph import Spectrograph
 from lyaforecast.survey import Survey
@@ -78,7 +78,7 @@ class Forecast:
         weights = {}
 
         weights_lya = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-        weights_qso = np.zeros_like(weights_lya)
+        weights_cross = np.zeros_like(weights_lya)
         eff_vol_z = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
 
         z_bin_edges,z_bin_centres = self._get_z_bins()
@@ -88,13 +88,15 @@ class Forecast:
 
             self.covariance(lmin, lmax)
             self.covariance.compute_eff_density_and_noise()
+            self.covariance.compute_3d_power_variance(0.14, 0.6)
+            self.covariance.compute_cross_power_variance(0.14, 0.6)
 
             weights_lya[iz] = self.covariance._w_lya
-            weights_qso[iz] = self.covariance._w_qso
-            eff_vol_z[iz] = self.covariance._compute_qso_eff_vol(0.14, 0.6)
+            weights_cross[iz] = self.covariance._w_cross
+            eff_vol_z[iz] = self.covariance._compute_tracer_eff_vol(0.14, 0.6)
 
         weights['lya'] = weights_lya
-        weights['qso'] = weights_qso
+        weights['cross'] = weights_cross
 
         return z_bin_centres, weights, eff_vol_z
 
@@ -213,8 +215,8 @@ class Forecast:
     def run_bao_forecast(self,forecast=None):
         print('Running BAO forecast')
 
-        if not self._bao_only:
-            raise AssertionError('"control: bao only" must be True to run BAO forecast.')
+        #if not self._bao_only:
+        #    raise AssertionError('"control: bao only" must be True to run BAO forecast.')
 
         # areas = np.array(self.survey.area_deg2)
         # resolutions = np.array(self.survey.res_kms)
@@ -289,11 +291,12 @@ class Forecast:
                                     for k in self.power_spec.k]) # (Mpc/h)**6
                 p3d_cross_var = np.array([self.covariance.compute_cross_power_variance(k,mu) 
                                     for k in self.power_spec.k]) # (Mpc/h)**6
-           
 
+
+                #get derivatives of p3d
                 dp3d_lya_dlogk = self.get_dp_dlogk(p3d_lya,mu)
                 dp3d_tracer_dlogk = self.get_dp_dlogk(p3d_tracer,mu)
-                dp3d_cross_dlogk = self.get_dp_dlogk(p3d_cross,mu)
+                dp3d_cross_dlogk = self.get_dp_dlogk(-p3d_cross,mu)
                 
                 # k = sqrt( kp**2 + kt**2)
                 # k'  = sqrt( ap**2*k**2*mu2 + at**2*k**2*(1-mu2))
@@ -408,6 +411,20 @@ class Forecast:
     def get_dp_dlogk(self,model,mu):
         """Return the differential of the a peak power spectrum component, 
             with respect to log k, add peak broadening."""
+        
+        #get peak only component
+        # smooth = get_pk_smooth(self.cosmo.results,self.power_spec.k,model)
+        # pk = model - smooth
+        x= self.power_spec.logk
+        y=np.log(model)
+        x -= np.mean(x)
+        x /= (np.max(x)-np.min(x))
+        w=np.ones(x.size)
+        w[:3] *= 1.e8 
+        coef=np.polyfit(x,y,8,w=w)
+        pol=np.poly1d(coef)
+        smooth = np.exp(pol(x))
+        pk = model-smooth        
 
         kp = mu * self.power_spec.k
         kt = np.sqrt(1-mu**2) * self.power_spec.k
@@ -417,11 +434,11 @@ class Forecast:
         f = self.cosmo.growth_rate # lograthmic growth (at z_ref)
         sig_nl_par = (1 + f) * sig_nl_perp # Mpc/h
         
-        model *= np.exp(-0.5 * ((sig_nl_par * kp)**2 + (sig_nl_perp * kt)**2))
+        pk *= np.exp(-0.5 * ((sig_nl_par * kp)**2 + (sig_nl_perp * kt)**2))
 
         # derivative of model wrt to log(k)
         dmodel = np.zeros(self.power_spec.k.size)
-        dmodel[1:] = model[1:]-model[:-1]
+        dmodel[1:] = pk[1:]-pk[:-1]
         dmodel_dlk  = dmodel/self.power_spec.dlogk
                     
         return dmodel_dlk

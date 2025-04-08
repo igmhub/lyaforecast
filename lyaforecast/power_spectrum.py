@@ -46,9 +46,9 @@ class PowerSpectrum:
             print('Warning, going below z = 1.8 with EdS power scaling')
         if self._cosmo.z_ref<1.8:
             raise ValueError('Can not have z_ref below 1.8, input:',self._cosmo.z_ref)
-        
+
         if self._bao_only:
-            pk_zref = self._cosmo.get_pk_lin_peak(k_hmpc)
+                pk_zref = self._cosmo.get_pk_lin_peak(k_hmpc)
         else:
             pk_zref = self._cosmo.get_pk_lin(k_hmpc,self._k_min_hmpc,self._k_max_hmpc)
 

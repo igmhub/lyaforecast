@@ -110,8 +110,8 @@ class Covariance:
         lmin_forest = self._survey.lrmin * (1 + self._zq)
 
         #this ensures the forest limits cannot be out of the defined bin.
-        # lmin_forest = np.fmax(lmin_forest,self.lmin)
-        # lmax_forest = np.fmin(lmax_forest,self.lmax)
+        #lmin_forest = np.fmax(lmin_forest,self.lmin)
+        #lmax_forest = np.fmin(lmax_forest,self.lmax)
 
         Lq_kms = c_kms*np.log(lmax_forest/lmin_forest)
 
@@ -164,7 +164,7 @@ class Covariance:
                                z_centre,z_tracer,self._zmin,self._zmax)
 
         # lyman-alpha weights
-        self._w_lya = self.weights.compute_weights()
+        w_lya = self.weights.compute_weights()
 
         # if self._survey.desi_sv:
         #     self._w_lya = np.zeros_like(self._w_lya)
@@ -173,9 +173,9 @@ class Covariance:
             #properly for pixel var and aliasing.
 
         # given weights, compute integrals in McDonald & Eisenstein (2007)
-        int_1 = self.weights.compute_int_1(self._w_lya)
-        int_2 = self.weights.compute_int_2(self._w_lya)
-        int_3 = self.weights.compute_int_3(self._w_lya)
+        int_1 = self.weights.compute_int_1(w_lya)
+        int_2 = self.weights.compute_int_2(w_lya)
+        int_3 = self.weights.compute_int_3(w_lya)
 
         # Pw2D in McDonald & Eisenstein (2007)
         self._aliasing_weights = int_2 / (int_1**2 * forest_length)
@@ -183,7 +183,7 @@ class Covariance:
         self._effective_noise_power = int_3 * pixel_length / (int_1**2 * forest_length)
 
         # quasar weights
-        # self._w_qso = self.weights.compute_weights('qso')   
+        self._w_tracer = self.weights.compute_tracer_weights(self._tracer)   
         # self._np_eff_qso = self.weights.compute_int_1(self._w_qso)
         # quasar shot noise (deg^2 km/s)
         self._tracer_noise_power = 1 / self.weights.get_n_tracer()
@@ -232,6 +232,8 @@ class Covariance:
         # use 0 < mu < 1 and they used -1 < mu < 1
         num_modes = vol_hmpc * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / (2 * np.pi**2)
         power_variance = 2 * total_power_hmpc**2 / num_modes
+
+        self._w_lya = self.weights._p3d_w / (self.weights._p3d_w + power_variance)
 
         #If not per magnitude, return power var for mmax only. 
         # Otherwise as a function of m input.
@@ -351,6 +353,8 @@ class Covariance:
 
         #var cross
         var_p_cross = cross**2 + total_power_lya_hmpc * (tracer_auto + noise)
+
+        self._w_cross = cross / (cross + var_p_cross)
 
         # survey volume in units of (Mpc/h)^3
         volume_mpch = self.get_survey_volume()

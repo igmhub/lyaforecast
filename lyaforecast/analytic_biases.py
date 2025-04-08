@@ -35,7 +35,7 @@ class AnalyticBias:
     
     def _get_density_bias(self,z,which):
         """Linear density bias as a function of redshift, 
-            values from DESI Collaboration et al., 2024b"""
+            values from DESI Collaboration et al., 2025"""
         if which=='lya':
             alpha = 2.9
             bias_zref = -0.1352
@@ -49,8 +49,9 @@ class AnalyticBias:
             # bias_zref = 1.67
             # zref = 2.7
         elif which=='lbg':
+            #From Hiram-Herrera LBGxLYA + LYAxLYA fits
             alpha = 1.44
-            bias_zref = 1.67
+            bias_zref = 3.3#1.67
             zref = 2.7
         else:
             raise ValueError(f'invalid biasing: {which}, select from: {self.POWER_OPTIONS}')
