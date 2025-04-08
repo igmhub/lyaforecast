@@ -23,23 +23,31 @@ class Plots:
             self._data = data
 
     def plot_da_h_m(self):
-        ap = self._data['ap_err_m'] * 100
-        at = self._data['at_err_m'] * 100
+        ap_lya = self._data['ap_err_lya_m'] * 100
+        at_lya = self._data['at_err_lya_m'] * 100
+        ap_qso = self._data['ap_err_qso_m'] * 100
+        at_qso = self._data['at_err_qso_m'] * 100
+        ap_cross = self._data['ap_err_cross_m'] * 100
+        at_cross = self._data['at_err_cross_m'] * 100
         band = self._survey.band
         mags = self._data['magnitudes'][band]
 
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,1,figsize=(10,6))
             #ax.plot(mags[1:],ap[1:]/ap[:-1],label=fr'$\alpha_\parallel$')
-            ax.plot(mags,ap,label=fr'$\alpha_\parallel$')
-            ax.plot(mags,at,label=fr'$\alpha_\perp$',linestyle='dashed')
+            ax.plot(mags,ap_lya,label=fr'$\alpha_\parallel Ly\alpha$',color='blue',alpha=0.5)
+            ax.plot(mags,at_lya,label=fr'$\alpha_\perp Ly\alpha$',linestyle='dashed',color='blue',alpha=0.5)
+            # ax.plot(mags,ap_qso,label=fr'$\alpha_\parallel LBG$',color='red',alpha=0.5)
+            # ax.plot(mags,at_qso,label=fr'$\alpha_\perp LBG$',linestyle='dashed',color='red',alpha=0.5)
+            ax.plot(mags,ap_cross,label=fr'$\alpha_\parallel Ly\alpha x LBG$',color='green',alpha=0.5)
+            ax.plot(mags,at_cross,label=fr'$\alpha_\perp Ly\alpha x LBG$',linestyle='dashed',color='green',alpha=0.5)
             ax.set_xlabel(fr'${band}_{{max}}$')
             ax.set_ylabel(f'% error')
-            ax.set_xlim(19,23)
-            ax.set_ylim(0,5)
+            ax.set_xlim(22.5,25)
+            ax.set_ylim(1e0,20)
             ax.legend()
             ax.grid()
-            ax.set_yscale('linear')
+            ax.set_yscale('log')
             self.fig = fig
 
     def plot_da_h_z(self):
@@ -95,7 +103,7 @@ class Plots:
             ax[1].legend()
             ax[1].grid()
             ax[0].set_yscale('linear')
-            ax[1].set_ylim(0,3)
+            #ax[1].set_ylim(0,5)
 
             ax[0].set_title('Individual correlations')
             ax[1].set_title('LyaxLya + LyaxQSO')
@@ -245,17 +253,19 @@ class Plots:
             fig,ax = plt.subplots(1,2,figsize=(15,6))
 
             # get limits, for now fix this
-            m = np.linspace(0,23.5,100)
-            qlf = self._survey.get_qso_lum_func
+            m = np.linspace(0,27,100)
+            qlf = self._survey.get_dn_dzdm
             # plot QL at different z
-            ax[0].plot(m,qlf(2.0,m),label='z=2.0')
-            ax[0].plot(m,qlf(2.5,m),label='z=2.5')
-            ax[0].plot(m,qlf(3.0,m),label='z=3.0')
-            ax[0].plot(m,qlf(3.5,m),label='z=3.5')
+            linestyles = ['solid','dashed']
+            for i,t in enumerate(['lya','tracer']):
+                ax[0].plot(m,qlf(2.0,m,t),label='z=2.0',linestyle=linestyles[i])
+                ax[0].plot(m,qlf(2.5,m,t),label='z=2.5',linestyle=linestyles[i])
+                ax[0].plot(m,qlf(3.0,m,t),label='z=3.0',linestyle=linestyles[i])
+                ax[0].plot(m,qlf(3.5,m,t),label='z=3.5',linestyle=linestyles[i])
 
             ax[0].legend(loc=2,fontsize=15)
             ax[0].set_yscale('log')
-            ax[0].set_xlim(16.5,23.5)
+            ax[0].set_xlim(18,27)
             ax[0].set_ylim(1e-3,)
             ax[0].set_xlabel('r mag',fontsize=15)
             ax[0].set_ylabel(r'dN/dzdm$\rm{ddeg}^2$',fontsize=15)
@@ -268,22 +278,20 @@ class Plots:
             desi_sv_points = np.array([12.1,11.8,11.1,10.6,9.5,8.8,8,7.2,
                                        6.2,5.3,4.4,3.6,3.3,2.6,2.2,1.7,1.4,1.1,0.7])
             
-            dz = desi_sv_z[1] - desi_sv_z[0]
-            qlf_dzddeg = np.zeros(desi_sv_z.size)
+            qlf_dzddeg_lya = np.zeros(desi_sv_z.size)
+            qlf_dzddeg_tr = np.zeros(desi_sv_z.size)
             for k,zi in enumerate(desi_sv_z):
-                qlf_dzddeg_i = np.sum(qlf(zi,m) * (m[1] - m[0]))
-                qlf_dzddeg[k] = qlf_dzddeg_i
-
-            ax[1].plot(desi_sv_z,qlf_dzddeg,label=r'Forecast')
-            #ax[1].plot(z,qlf_dzddeg * dz,label=r'Forecast')
+                qlf_dzddeg_lya[k] = np.sum(qlf(zi,m,'lya') * (m[1] - m[0]))
+                qlf_dzddeg_tr[k] = np.sum(qlf(zi,m,'tracer') * (m[1] - m[0]))
+         
+            ax[1].plot(desi_sv_z,qlf_dzddeg_lya,label=r'Ly$\alpha$ sources')
+            ax[1].plot(desi_sv_z,qlf_dzddeg_tr,label=r'Tracers')
 
             ax[1].scatter(desi_sv_z,desi_sv_points/(0.1),color='blue',
-                       marker='x',alpha=0.7,label=r'DESI SV')
+                       marker='x',alpha=0.7,label=r'DESI SV quasars')
         
             ax[1].set_xlabel('z',fontsize=15)
-            #ax[1].set_ylabel(r'$dN/dz$\rm{ddeg}^2$',fontsize=15)
             ax[1].set_ylabel(r'$dn/dz$',fontsize=15)
-            #ax[1].set_xlim(1.6,2.1)
             ax[1].grid()
             ax[1].legend()
 
@@ -327,18 +335,19 @@ class Plots:
     def plot_weights(self,weights,zbins):
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,2,figsize=(15,6))
-            for i,zbc in enumerate(self._survey.z_bin_centres):
-                ax[0].plot(self._survey.maglist,weights[i],label=f'z={zbc}')
+            for i,zbc in enumerate(zbins):
+                ax[0].plot(self._survey.maglist,weights['lya'][i],label=f'z={zbc}')
 
             ax[0].legend(loc=2,fontsize=15)
             ax[0].set_xlabel(r'$r$',fontsize=15)
             ax[0].set_ylabel(r'$w(m)$',fontsize=15)
             ax[0].set_yscale('linear')
             
-            weights_z = weights[:,-1]
-            ax[1].plot(zbins,weights_z)
+            ax[1].plot(zbins,weights['lya'][:,-1],label='lya')
+            ax[1].plot(zbins,weights['qso'][:,-1],label='qso')
             ax[1].set_xlabel(r'$z$',fontsize=15)
             ax[1].set_ylabel(r'$w(z)$',fontsize=15)
+            ax[1].legend()
 
             self.fig = fig
 

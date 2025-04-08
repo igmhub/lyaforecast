@@ -43,7 +43,6 @@ class PowerSpectrum:
     def compute_linear_power_evol(self,z,k_hmpc):
         """Scale linear power, assuming EdS scale with redshift"""
         if z<1.8:
-            #raise ValueError('Can not use EdS to go below z = 1.8')
             print('Warning, going below z = 1.8 with EdS power scaling')
         if self._cosmo.z_ref<1.8:
             raise ValueError('Can not have z_ref below 1.8, input:',self._cosmo.z_ref)
@@ -81,6 +80,7 @@ class PowerSpectrum:
         # compute polar decomposition
         k_hmpc = np.sqrt(kp_hmpc**2 + kt_hmpc**2)
         mu = kp_hmpc / (k_hmpc + 1.e-10)
+
         # compute power in Mpc/h (from power_spectrum module)
         p3d_hmpc = self.compute_p3d_hmpc(z,k_hmpc,mu,which)
         # convert power to observed units
@@ -114,7 +114,7 @@ class PowerSpectrum:
         dkms_dhmpc = self._cosmo.velocity_from_distance(z)
         kp_hmpc = k_hmpc * mu
         kp_kms = kp_hmpc / dkms_dhmpc    
-        
+
         # get linear power at zrefs
         p3d_hmpc = self.compute_p3d_hmpc(z,k_hmpc,mu,which)
         p3d_degkms = p3d_hmpc * dkms_dhmpc / dhmpc_ddeg**2

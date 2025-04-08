@@ -56,7 +56,6 @@ class CosmoCamb:
         """Return peak component of linear power interpolator in units of h/Mpc, at zref"""
         return np.interp(k,self._kh,self._pk_peak)
 
-    
 
     def velocity_from_distance(self,z):
         """Conversion factor from Mpc/h to km/s, at redshift z."""

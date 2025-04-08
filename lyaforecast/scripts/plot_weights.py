@@ -10,7 +10,7 @@ def main():
 
     plotter = Plots(forecast)
 
-    weights,z_bins = forecast.compute_weights()
+    z_bins,weights,_ = forecast.compute_weights()
 
     plotter.plot_weights(weights,z_bins)
 

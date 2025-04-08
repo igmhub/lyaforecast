@@ -50,18 +50,18 @@ class Weights:
         self._p3d_w = self._powerspec.compute_p3d_kms(self._z_bin,self.kt_w_deg
                                                       ,self.kp_w_kms,self._res_kms,
                                                       self._pix_kms,which)
+
         self._p1d_w = self._powerspec.compute_p1d_kms(self._z_bin,self.kp_w_kms,
                                                       self._res_kms,self._pix_kms)
-        
+       
+        # compute first weights using only 1D and noise variance
         if which=='lya':
             self._compute_weights = self._compute_weights_lya
-            self._initialise_weights = self._initialise_weights_lya
+            weights = self._initialise_weights_lya()
         elif which=='qso':
             self._compute_weights = self._compute_weights_qso
-            self._initialise_weights = self._initialise_weights_qso
-        
-        # compute first weights using only 1D and noise variance
-        weights = self._initialise_weights()
+            weights = self._initialise_weights_qso()
+    
         num_iter = 3
         for i in range(num_iter):
             weights = self._compute_weights(weights)
@@ -92,6 +92,7 @@ class Weights:
         aliasing = int_2 / (int_1**2 * self._forest_length)
         # weights include aliasing as signal
         signal_power = self._p3d_w + self._p1d_w * aliasing
+
         weights = signal_power / (signal_power + noise_power)
 
         return weights
@@ -103,20 +104,26 @@ class Weights:
 
     # We're not computing an effective density, just n_3d, but easier to do it in this module.
     def _compute_weights_qso(self,weights):
-        """Compute quasar density as a function of maximum magnitude"""
+        """FKP weighting of quasars."""
+        np_eff = self.compute_int_1(weights)
+        weights = self._p3d_w / (self._p3d_w + 1 / np_eff)
 
-        zlist = np.linspace(self._zmin,self._zmax,self._survey.nzq)
-        dz = zlist[1] - zlist[0]
-        mags = self._survey.maglist
-        
-        dn_dzdm = self._survey.get_qso_lum_func(self._z_bin,mags)
-        dkms_dz = self._cosmo.SPEED_LIGHT / (1 + self._z_bin)
-        dn_dmdkms = dn_dzdm / dkms_dz
+        return weights
 
-        dm = mags[1] - mags[0]
-        dn_dkms = np.cumsum(dn_dmdkms * dm)
+    def _get_dn_dkmsdm(self,z,m,which='lya'):
 
-        return dn_dkms
+        dkms_dz = self._cosmo.SPEED_LIGHT / (1 + z)
+        # if self._survey.desi_sv:
+        #     # quasar number density
+        #     dn_degdz = self._survey.get_qso_lum_func(z) 
+        #     dndm_degdz = dn_degdz / (m[1]-m[0])
+        # else:
+        # number density
+        dndm_degdzdm = self._survey.get_dn_dzdm(z,m,which)
+            
+        dn_degkmsdm = dndm_degdzdm / dkms_dz
+            
+        return dn_degkmsdm
 
     def compute_int_1(self,weights):
         """Integral 1 in McDonald & Eisenstein (2007).
@@ -124,15 +131,13 @@ class Weights:
             on the current value of the weights, that in turn depend on I1.
             We solve these iteratively (converges very fast)."""
         # quasar number density
-        dkms_dz = self._cosmo.SPEED_LIGHT / (1 + self._zq)
-        dndm_degdz = self._survey.get_qso_lum_func(self._zq,self._survey.maglist)
-        dndm_degkms = dndm_degdz / dkms_dz
+        dn_dmdegkms = self._get_dn_dkmsdm(self._zq,self._survey.maglist,which='lya')
         dm = self._survey.maglist[1] - self._survey.maglist[0]
-        integrand = dndm_degkms * weights
+        integrand = dn_dmdegkms * weights * dm
         # weighted density of quasars
-        #I1 = np.sum(dndm_degkms * weights) * dm
+
         #move to using cumsum so we can plot as a function of magnitude
-        int_1 = np.cumsum(integrand*dm)
+        int_1 = np.cumsum(integrand)
 
         return int_1
 
@@ -140,12 +145,10 @@ class Weights:
         """Integral 2 in McDonald & Eisenstein (2007).
             It is used to set the level of aliasing."""
         # quasar number density
-        dndm_degdz = self._survey.get_qso_lum_func(self._zq,self._survey.maglist)
-        dkms_dz = self._cosmo.SPEED_LIGHT / (1+self._zq)
-        dndm_degkms = dndm_degdz / dkms_dz
+        dn_dmdegkms = self._get_dn_dkmsdm(self._zq,self._survey.maglist,which='lya')
         dm = self._survey.maglist[1]-self._survey.maglist[0]
-        integrand = dndm_degkms * weights**2
-        int_2 = np.cumsum(integrand*dm)
+        integrand = dn_dmdegkms * weights**2 * dm
+        int_2 = np.cumsum(integrand)
         
         return int_2
 
@@ -155,12 +158,15 @@ class Weights:
         # pixel noise variance (dimensionless)
         pixel_var = self._get_pix_var_m()
         # quasar number density
-        dndm_degdz = self._survey.get_qso_lum_func(self._zq,self._survey.maglist)
-        dkms_dz = self._cosmo.SPEED_LIGHT / (1 + self._zq)
-        dndm_degkms = dndm_degdz / dkms_dz
+        dn_dmdegkms = self._get_dn_dkmsdm(self._zq,self._survey.maglist,which='lya')
         dm = self._survey.maglist[1] - self._survey.maglist[0]
-        integrand = dndm_degkms * weights**2 * pixel_var
-        int_3 = np.cumsum(integrand*dm)
+
+        #when we don't have dn/dz with magnitude
+        # if self._survey.desi_sv:
+        #     pixel_var = np.mean(pixel_var)
+
+        integrand = dn_dmdegkms * weights**2 * pixel_var * dm
+        int_3 = np.cumsum(integrand)
 
         return int_3
 
@@ -175,16 +181,15 @@ class Weights:
 
         return np_eff
 
-    def get_np_eff_qso(self,weights):
-        """Effective density of quasars in deg km/s.
-            It is used in constructing the weights as a function of mag."""
-        # get effective density of quasars
-        int_1 = self._compute_weights_qso()
-        # number of pixels in a forest
-        num_pix = self._forest_length / self._pix_kms
-        np_eff = int_1 * num_pix
+    def get_n_tracer(self):
+        """Compute tracer density as a function of maximum magnitude"""
 
-        return np_eff
+        mags = self._survey.maglist
+        dn_dkmsdm = self._get_dn_dkmsdm(self._z_bin,self._survey.maglist,which='tracer')
+        dm = mags[1] - mags[0]
+        dn_dkms = np.cumsum(dn_dkmsdm * dm)
+ 
+        return dn_dkms
     
     def _get_pix_var_m(self):
         """Noise pixel variance as a function of magnitude (dimensionless)"""

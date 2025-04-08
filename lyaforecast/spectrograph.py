@@ -12,13 +12,15 @@ class Spectrograph:
         """Construct object, probably from files"""
         #this is to be read from file currently.
         self._zq = None
+        #survey
+        self._survey = survey
         #magnitude info from survey class (g or r)
-        self._band = survey.band
+        self._band = self._survey.band
         #exposure number/time to read from file, fixed for now.
         self._file_num_exp = 4
         self._file_exp_time = 4000
         #get directory containing snr/mag files
-        self._snr_file_dir = get_dir(config['survey'].get('snr-file-dir'))
+        self._snr_file_dir = get_dir(config['lya forest'].get('snr-file-dir'))
         #list of filenames
         self._filenames = list(self._snr_file_dir.glob('*'))
         assert len(self._filenames) > 0, 'SNR files not found'
@@ -188,9 +190,10 @@ class Spectrograph:
           If S/N = 0, or not covered, return very large number."""
         large_noise=1e10  
         if rmag > self._magnitudes[-1]: 
-            print('WARNING: extrapolating beyond stored magnitude information')
-            #print(f'mag {rmag} too faint, returning large noise')
-            return large_noise        
+            #print('WARNING: extrapolating beyond stored magnitude information')
+            if self._survey.lya_tracer!='lbg':
+                print(f'mag {rmag} too faint, returning large noise')
+                return large_noise        
         if zq > self._zq[-1] or zq < self._zq[0]: 
             print(f'zqso {zq} out of range, returning large noise')
             return large_noise
@@ -211,7 +214,10 @@ class Spectrograph:
         # scale with number of exposures
         snr = snr_per_exp * np.sqrt(num_exp / self._file_num_exp)
         # prevent division by zero
-        snr = np.fmax(snr,1 / large_noise)
+        snr = np.fmax(snr, 1 / large_noise)
+
+        if self._survey.lya_tracer == 'lbg':
+            snr = 0.3
 
         return 1 / snr
 
