@@ -37,9 +37,6 @@ class PowerSpectrum:
         self.mu = mu_edges[:-1] + np.diff(mu_edges)/2     
         self.dmu = np.diff(mu_edges)[0]
 
-        # peak-only
-        self._bao_only = config['control'].getboolean('bao only')
-
     def compute_linear_power_evol(self,z,k_hmpc):
         """Scale linear power, assuming EdS scale with redshift"""
         if z<1.8:
@@ -47,10 +44,7 @@ class PowerSpectrum:
         if self._cosmo.z_ref<1.8:
             raise ValueError('Can not have z_ref below 1.8, input:',self._cosmo.z_ref)
 
-        if self._bao_only:
-                pk_zref = self._cosmo.get_pk_lin_peak(k_hmpc)
-        else:
-            pk_zref = self._cosmo.get_pk_lin(k_hmpc,self._k_min_hmpc,self._k_max_hmpc)
+        pk_zref = self._cosmo.get_pk_lin(k_hmpc,self._k_min_hmpc,self._k_max_hmpc)
 
         eds = ((1+self._cosmo.z_ref)/(1+z))**2
 

@@ -188,7 +188,7 @@ class Covariance:
         # quasar shot noise (deg^2 km/s)
         self._tracer_noise_power = 1 / self.weights.get_n_tracer()
 
-    def _compute_total_lya_power(self,z,kt_deg,kp_kms,mu):
+    def _compute_total_lya_power(self,z,kt_deg,kp_kms):
         """Sum of 3D Lya power, aliasing and effective noise power in deg2kms"""
         # previously computed p2wd and pn_eff.
         p3d = self._power_spec.compute_p3d_kms(z,kt_deg,kp_kms,self._res_kms,self._pix_kms,'lya')
@@ -223,7 +223,7 @@ class Covariance:
 
         # get total power in units of observed coordinates 
         # To-do: get P_total(mag)
-        total_power_degkms = self._compute_total_lya_power(z,kt_deg,kp_kms,mu)
+        total_power_degkms = self._compute_total_lya_power(z,kt_deg,kp_kms)
         # convert into units of (Mpc/h)^3
         total_power_hmpc = total_power_degkms * dhmpc_ddeg**2 / dkms_dmpch
         #survey volume
@@ -336,7 +336,7 @@ class Covariance:
         kt_deg = kt_hmpc * dhmpc_ddeg
 
         #lya auto
-        total_power_lya = self._compute_total_lya_power(z,kt_deg,kp_kms,mu)
+        total_power_lya = self._compute_total_lya_power(z,kt_deg,kp_kms)
         total_power_lya_hmpc = total_power_lya * dhmpc_ddeg**2 / dkms_dhmpc
 
         #cross

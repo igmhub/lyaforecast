@@ -36,9 +36,6 @@ class Forecast:
         self.out_file = Path(self.config['output']['filename'])
         self.out_folder = self.out_file.parent
 
-        # Use only BAO part of Pl, true to run BAO forecast.
-        self._bao_only = self.config['control'].getboolean('bao only')
-
         # tracer types
         self._lya_tracer = self.config['lya forest'].get('tracer')
         self._tracer = self.config['tracer'].get('tracer')
@@ -197,8 +194,7 @@ class Forecast:
                 
                 p3d_tracer_var = np.array([self.covariance.compute_tracer_power_variance(k,mu) 
                                     for k in self.power_spec.k])
-
-
+                
                 p3d_z_k_mu[iz,:,i] = p3d
                 p3d_qso_z_k_mu[iz,:,i] = p3d_tracer
 
@@ -214,9 +210,6 @@ class Forecast:
 
     def run_bao_forecast(self,forecast=None):
         print('Running BAO forecast')
-
-        #if not self._bao_only:
-        #    raise AssertionError('"control: bao only" must be True to run BAO forecast.')
 
         # areas = np.array(self.survey.area_deg2)
         # resolutions = np.array(self.survey.res_kms)
@@ -328,7 +321,7 @@ class Forecast:
             sigma_da_lya_lya_lya_tracer[iz] = 1 / (1 / sigma_da_lya_z + 1 / sigma_da_cross_z)
             sigma_dh_lya_lya_lya_tracer[iz] = 1 / (1 / sigma_dh_lya_z + 1 / sigma_dh_cross_z)
 
-            print(f'Comb at: {sigma_da_lya_lya_lya_tracer[iz]}, comb ap: {sigma_dh_lya_lya_lya_tracer[iz]}')
+            print(f'at (lyaxlya + lyaxtr): {sigma_da_lya_lya_lya_tracer[iz]}, ap (lyaxlya + lyaxtr): {sigma_dh_lya_lya_lya_tracer[iz]}')
         
         
         if self.covariance.per_mag:
@@ -362,14 +355,14 @@ class Forecast:
 
 
 
-        print(f'\n Combined: sigma_da={sigma_da_combined}'
-                    f', sigma_dh={sigma_dh_combined}')
-        print(f'\n Combined: sigma_da_{self._tracer}={sigma_da_combined_tracer}'
-                    f', sigma_dh_{self._tracer}={sigma_dh_combined_tracer}')
-        print(f'\n Combined: sigma_da_cross={sigma_da_combined_cross}'
-                    f', sigma_dh_cross={sigma_dh_combined_cross}')
-        print(f'\n Combined: sigma_da_comb={sigma_da_combined_comb}'
-                    f', sigma_dh_comb={sigma_dh_combined_comb}')
+        print(f'\n Combined: at (lyaxlya)={sigma_da_combined}'
+                    fr', ap (lyaxlya)={sigma_dh_combined}')
+        print(f'\n Combined: at ({self._tracer})={sigma_da_combined_tracer}'
+                    fr', ap ({self._tracer})={sigma_dh_combined_tracer}')
+        print(f'\n Combined: at (lyaxtr)={sigma_da_combined_cross}'
+                    fr', ap (lyaxtr)={sigma_dh_combined_cross}')
+        print(f'\n Combined: at (lyaxlya + lyaxtr)={sigma_da_combined_comb}'
+                    fr', ap (lyaxlya + lyaxtr)={sigma_dh_combined_comb}')
        
         data = {}
         data["redshifts"] = z_bin_centres
@@ -411,7 +404,19 @@ class Forecast:
     def get_dp_dlogk(self,model,mu):
         """Return the differential of the a peak power spectrum component, 
             with respect to log k, add peak broadening."""
+          
+        pk = self.get_p_pk(model)
         
+        pk = self.apply_peak_smoothing(pk,mu)
+
+        # derivative of model wrt to log(k)
+        dmodel = np.zeros(self.power_spec.k.size)
+        dmodel[1:] = pk[1:]-pk[:-1]
+        dmodel_dlk  = dmodel/self.power_spec.dlogk
+                    
+        return dmodel_dlk
+    
+    def get_p_pk(self,model):
         #get peak only component
         # smooth = get_pk_smooth(self.cosmo.results,self.power_spec.k,model)
         # pk = model - smooth
@@ -424,8 +429,12 @@ class Forecast:
         coef=np.polyfit(x,y,8,w=w)
         pol=np.poly1d(coef)
         smooth = np.exp(pol(x))
-        pk = model-smooth        
+        pk = model-smooth    
 
+        return pk
+
+    def apply_peak_smoothing(self,pk,mu):
+        
         kp = mu * self.power_spec.k
         kt = np.sqrt(1-mu**2) * self.power_spec.k
         
@@ -436,12 +445,9 @@ class Forecast:
         
         pk *= np.exp(-0.5 * ((sig_nl_par * kp)**2 + (sig_nl_perp * kt)**2))
 
-        # derivative of model wrt to log(k)
-        dmodel = np.zeros(self.power_spec.k.size)
-        dmodel[1:] = pk[1:]-pk[:-1]
-        dmodel_dlk  = dmodel/self.power_spec.dlogk
-                    
-        return dmodel_dlk
+        return pk
+
+
     
     def get_fisher(self,mu,dp_dlogk,var):
         """Compute fisher matrix for ap, at"""
@@ -460,14 +466,14 @@ class Forecast:
             sigma_da = np.sqrt(cov_diag.T[1])
             corr_coef = cov.T[0,1]/np.sqrt(cov_diag.T[0]*cov_diag.T[1])
 
-            print(f"ap_{which}={sigma_dh[-1]},at_{which}={sigma_da[-1]},corr={corr_coef[-1]}")
+            print(f"ap ({which})={sigma_dh[-1]}, at ({which})={sigma_da[-1]},corr={corr_coef[-1]}")
         else:
             cov = np.linalg.inv(fisher_matrix)
             sigma_dh = np.sqrt(cov[0,0])
             sigma_da = np.sqrt(cov[1,1])    
             corr_coef = cov[0,1]/np.sqrt(cov[0,0]*cov[1,1])
 
-            print(f"ap_{which}={sigma_dh},at_{which}={sigma_da},corr={corr_coef}")
+            print(f"ap ({which})={sigma_dh}, at ({which})={sigma_da},corr={corr_coef}")
             
         return sigma_dh, sigma_da, corr_coef
 

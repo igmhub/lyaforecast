@@ -1,6 +1,7 @@
 """Plot power spectra and parameter error bars as functions of survey properties."""
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.ndimage import gaussian_filter1d
 
 class Plots:
     def __init__(self,forecast=None,data=None):
@@ -249,8 +250,41 @@ class Plots:
             self.fig = fig
 
     def plot_qso_lf(self):
+        plt.rcParams.update({
+    "text.usetex": False,  # Disable LaTeX (since you can't install it)
+    "mathtext.fontset": "cm",  # Use Computer Modern for math
+    "mathtext.rm": "serif",
+    "mathtext.it": "serif:italic",
+    "mathtext.bf": "serif:bold",
+    
+    "font.family": "serif",  # Use serif font (JCAP style)
+    "font.size": 10,  # General font size
+    "axes.labelsize": 12,  # Axis label font size
+    "axes.titlesize": 12,  # Title font size
+    "xtick.labelsize": 10,  # Tick label size
+    "ytick.labelsize": 10,
+    "legend.fontsize": 10,
+    
+    "axes.linewidth": 1,  # Thicker axis for clarity
+    "xtick.major.size": 5,  # Major tick size
+    "ytick.major.size": 5,
+    "xtick.minor.size": 3,  # Minor tick size
+    "ytick.minor.size": 3,
+    "xtick.major.width": 1,  # Major tick width
+    "ytick.major.width": 1,
+    
+    "lines.linewidth": 1.5,  # Thicker lines for better visibility
+    "lines.markersize": 6,  # Slightly larger markers
+    
+    "figure.figsize": (7, 3.5),  # Double-column width (~7 in) with good aspect ratio
+    "figure.dpi": 300,  # High resolution
+    "savefig.dpi": 300,  # Save high-resolution figures
+    "savefig.format": "pdf",  # Save as vector PDF
+    "savefig.bbox": "tight",  # Remove extra whitespace
+})
+        
         with self._make_style()[0], self._make_style()[1]: 
-            fig,ax = plt.subplots(1,2,figsize=(15,6))
+            fig,ax = plt.subplots(1,1,figsize=(12,7))
 
             # get limits, for now fix this
             m = np.linspace(0,27,100)
@@ -258,18 +292,25 @@ class Plots:
             # plot QL at different z
             linestyles = ['solid','dashed']
             for i,t in enumerate(['lya','tracer']):
-                ax[0].plot(m,qlf(2.0,m,t),label='z=2.0',linestyle=linestyles[i])
-                ax[0].plot(m,qlf(2.5,m,t),label='z=2.5',linestyle=linestyles[i])
-                ax[0].plot(m,qlf(3.0,m,t),label='z=3.0',linestyle=linestyles[i])
-                ax[0].plot(m,qlf(3.5,m,t),label='z=3.5',linestyle=linestyles[i])
+                ax.plot(m,gaussian_filter1d(qlf(2.0,m,t),0.7),label='z=2.0',
+                           linestyle=linestyles[i],color='blue',alpha=0.5)
+                ax.plot(m,gaussian_filter1d(qlf(2.5,m,t),0.7),label='z=2.5',
+                           linestyle=linestyles[i],color='green',alpha=0.5)
+                ax.plot(m,gaussian_filter1d(qlf(3.0,m,t),0.7),label='z=3.0',
+                           linestyle=linestyles[i],color='red',alpha=0.5)
+                ax.plot(m,gaussian_filter1d(qlf(3.5,m,t),0.7),label='z=3.5',
+                           linestyle=linestyles[i],color='purple',alpha=0.5)
+                if i == 0:
+                    ax.legend(loc=2,fontsize=20)
+            ax.set_yscale('log')
+            ax.set_xlim(18,27)
+            ax.set_ylim(1e-3,)
+            ax.set_xlabel('$r$ mag',fontsize=20)
+            ax.set_ylabel(r'$\frac{dN}{dmddeg^2}(z)$',fontsize=20)
+            ax.grid()
 
-            ax[0].legend(loc=2,fontsize=15)
-            ax[0].set_yscale('log')
-            ax[0].set_xlim(18,27)
-            ax[0].set_ylim(1e-3,)
-            ax[0].set_xlabel('r mag',fontsize=15)
-            ax[0].set_ylabel(r'dN/dzdm$\rm{ddeg}^2$',fontsize=15)
-            ax[0].grid()
+            self.fig = fig
+            return
 
             #dn_dzddeg vs z
 

@@ -4,7 +4,7 @@ import numpy as np
 class AnalyticBias:
     """Class to store analytic formulae for biases of Lya P3D, including non-linear corrections.
         These will later be handled by ForestFlow, currently parameter values are out-of-date."""
-    POWER_OPTIONS = ['lya','qso']
+    OPTIONS = ['lya','qso','lbg']
 
     def __init__(self,cosmo):
         self._cosmo = cosmo
@@ -40,21 +40,17 @@ class AnalyticBias:
             alpha = 2.9
             bias_zref = -0.1352
             zref = 2.33
-            # bias_zref = -0.219
-            # zref = 2.7
         elif which=='qso':
             alpha = 1.44
             bias_zref = 3.54
             zref = 2.33
-            # bias_zref = 1.67
-            # zref = 2.7
         elif which=='lbg':
-            #From Hiram-Herrera LBGxLYA + LYAxLYA fits
+            #From Vanina et al. 2024
             alpha = 1.44
-            bias_zref = 3.3#1.67
-            zref = 2.7
+            bias_zref = 3.48
+            zref = 2.9
         else:
-            raise ValueError(f'invalid biasing: {which}, select from: {self.POWER_OPTIONS}')
+            raise ValueError(f'invalid biasing: {which}, select from: {self.OPTIONS}')
         
         return bias_zref * ((1 + z)/(1 + zref))**alpha
 
@@ -65,8 +61,6 @@ class AnalyticBias:
             alpha = 0.0
             zref = 2.33
             beta_zref = 1.45
-            # zref = 2.7
-            # beta_zref = 0.84
         elif which=='qso':
             alpha = 0.0
             zref = 2.33
@@ -76,10 +70,10 @@ class AnalyticBias:
             zref = 2.7
             beta_zref = self._growth_rate/self._get_density_bias(zref,which)
 
-            #note: growth-rate here is estimated at zref set by camb config, that won't be the same as both 2.33 and 2.7.
+            #to fix: growth-rate here is estimated at zref set by camb config, that won't be the same as both 2.33 and 2.7.
 
         else:
-            raise ValueError(f'invalid biasing: {which}, select from: {self.POWER_OPTIONS}')
+            raise ValueError(f'invalid biasing: {which}, select from: {self.OPTIONS}')
         
         return beta_zref*((1 + z)/(1 + zref))**alpha
 
