@@ -217,7 +217,7 @@ class Spectrograph:
         snr = np.fmax(snr, 1 / large_noise)
 
         if self._survey.lya_tracer == 'lbg':
-            snr = 0.33
+            snr = 0.35
 
         return 1 / snr
 

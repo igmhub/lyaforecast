@@ -165,12 +165,7 @@ class Covariance:
 
         # lyman-alpha weights
         w_lya = self.weights.compute_weights()
-
-        # if self._survey.desi_sv:
-        #     self._w_lya = np.zeros_like(self._w_lya)
-        #     self._w_lya[-1] = 1
-            # this is a step in the right direction, but we need to account
-            #properly for pixel var and aliasing.
+        self._w_lya = w_lya
 
         # given weights, compute integrals in McDonald & Eisenstein (2007)
         int_1 = self.weights.compute_int_1(w_lya)
@@ -184,7 +179,6 @@ class Covariance:
 
         # quasar weights
         self._w_tracer = self.weights.compute_tracer_weights(self._tracer)   
-        # self._np_eff_qso = self.weights.compute_int_1(self._w_qso)
         # quasar shot noise (deg^2 km/s)
         self._tracer_noise_power = 1 / self.weights.get_n_tracer()
 
@@ -233,7 +227,7 @@ class Covariance:
         num_modes = vol_hmpc * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / (2 * np.pi**2)
         power_variance = 2 * total_power_hmpc**2 / num_modes
 
-        self._w_lya = self.weights._p3d_w / (self.weights._p3d_w + power_variance)
+        # self._w_lya = self.weights._p3d_w / (self.weights._p3d_w + power_variance)
 
         #If not per magnitude, return power var for mmax only. 
         # Otherwise as a function of m input.
@@ -354,7 +348,7 @@ class Covariance:
         #var cross
         var_p_cross = cross**2 + total_power_lya_hmpc * (tracer_auto + noise)
 
-        self._w_cross = cross / (cross + var_p_cross)
+        self._w_cross = abs(cross) / (abs(cross) + var_p_cross)
 
         # survey volume in units of (Mpc/h)^3
         volume_mpch = self.get_survey_volume()

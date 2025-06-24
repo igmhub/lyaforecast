@@ -138,7 +138,7 @@ class PowerSpectrum:
         k_kms = np.fmax(k_kms,k_min)
         exp1 = 3 + n_F_z + alpha_F * np.log(k_kms/k0)
         toret = np.pi * A_F / k0 * pow(k_kms/k0, exp1-1) * pow((1+z)/(1+z0), B_F)
-        return toret
+        return toret 
     
     #currently un-used
     def compute_p1d_hmpc(self,z,k_hmpc,res_hmpc=None,pix_hmpc=None):

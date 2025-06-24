@@ -19,6 +19,7 @@ class Plots:
             self._survey = forecast.survey
             self._covariance = forecast.covariance
             self._power_spec = forecast.power_spec
+            self._cosmo = forecast.cosmo
 
         if data is not None:
             self._data = data
@@ -212,16 +213,16 @@ class Plots:
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,1,figsize=(10,6))
 
-            desi_sv_z = [1.65,1.75,1.85,1.95,2.05]
-            desi_sv_np = [0.22,0.21,0.19,0.18,0.16]
+            # desi_sv_z = [1.65,1.75,1.85,1.95,2.05]
+            # desi_sv_np = [0.22,0.21,0.19,0.18,0.16]
 
             ax.plot(zbs,n_p3d_z_lya,label='lya')
             ax.plot(zbs,n_p3d_z_qso,label='qso')
-            ax.scatter(desi_sv_z,desi_sv_np,color='blue',
-                       marker='x',alpha=0.7,label=r'DESI SV')
+            # ax.scatter(desi_sv_z,desi_sv_np,color='blue',
+            #            marker='x',alpha=0.7,label=r'DESI SV')
 
             ax.set_xlabel(fr'z')
-            ax.set_ylabel(r'$\overline{n}P(0.14,0.6)$')
+            ax.set_ylabel(r'$\overline{n}P(k=0.14,\mu=0.6)$')
             ax.grid()
             ax.set_yscale('linear')
             ax.legend()
@@ -250,38 +251,6 @@ class Plots:
             self.fig = fig
 
     def plot_qso_lf(self):
-        plt.rcParams.update({
-    "text.usetex": False,  # Disable LaTeX (since you can't install it)
-    "mathtext.fontset": "cm",  # Use Computer Modern for math
-    "mathtext.rm": "serif",
-    "mathtext.it": "serif:italic",
-    "mathtext.bf": "serif:bold",
-    
-    "font.family": "serif",  # Use serif font (JCAP style)
-    "font.size": 10,  # General font size
-    "axes.labelsize": 12,  # Axis label font size
-    "axes.titlesize": 12,  # Title font size
-    "xtick.labelsize": 10,  # Tick label size
-    "ytick.labelsize": 10,
-    "legend.fontsize": 10,
-    
-    "axes.linewidth": 1,  # Thicker axis for clarity
-    "xtick.major.size": 5,  # Major tick size
-    "ytick.major.size": 5,
-    "xtick.minor.size": 3,  # Minor tick size
-    "ytick.minor.size": 3,
-    "xtick.major.width": 1,  # Major tick width
-    "ytick.major.width": 1,
-    
-    "lines.linewidth": 1.5,  # Thicker lines for better visibility
-    "lines.markersize": 6,  # Slightly larger markers
-    
-    "figure.figsize": (7, 3.5),  # Double-column width (~7 in) with good aspect ratio
-    "figure.dpi": 300,  # High resolution
-    "savefig.dpi": 300,  # Save high-resolution figures
-    "savefig.format": "pdf",  # Save as vector PDF
-    "savefig.bbox": "tight",  # Remove extra whitespace
-})
         
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,1,figsize=(12,7))
@@ -340,18 +309,41 @@ class Plots:
 
     def plot_neff(self,neff):
         with self._make_style()[0], self._make_style()[1]: 
-            fig,ax = plt.subplots(1,2,figsize=(15,6))
+            fig,ax = plt.subplots(1,2,figsize=(20,6))
+            lim = 20
+            w = self._survey.maglist > lim
             for i,zbc in enumerate(self._survey.z_bin_centres):
-                ax[0].plot(self._survey.maglist,neff[i],label=f'z={zbc}')
+                ne_i = neff['lya'][i][w] 
+                n_i_tr = (neff['tracer'][i][w] / self._cosmo.distance_from_degrees(zbc)**2 
+                            * neff['bin_lengths'][i])
+
+                
+                
+
+                ax[0].plot(self._survey.maglist[w],ne_i,label=f'z={zbc}')
+                ax[1].plot(self._survey.maglist[w],n_i_tr,label=f'z={zbc}',linestyle='dashed')
 
             ax[0].legend(loc=2,fontsize=15)
-            ax[0].set_xlim(21,23)
+            ax[0].set_xlim(lim,23)
             ax[0].set_xlabel(r'$r_{\rm max}$',fontsize=15)
             ax[0].set_ylabel(r'$\overline{n}_{\rm eff}[\rm (km/s)^{-3}]$',fontsize=15)
-            ax[0].set_yscale('linear')
+            ax[0].set_yscale('log')
+
+            ax[1].legend(loc=2,fontsize=15)
+            ax[1].set_xlim(lim,23)
+            ax[1].set_xlabel(r'$r_{\rm max}$',fontsize=15)
+            ax[1].set_ylabel(r'$\overline{n}_{\rm tracer}[\rm deg^{-2}(km/s)^{-1}]$',fontsize=15)
+            ax[1].set_yscale('log')
+
+            ax[0].grid(which='both')
+            ax[1].grid(which='both')
             
-            ax[1].plot(self._survey.z_bin_centres,neff[:,-1])
-            ax[1].set_xlabel(r'$z$',fontsize=15)
+            
+            #ax[1].plot(self._survey.z_bin_centres,neff['lya'][:,-1],label='lya')
+            # ax[1].plot(self._survey.z_bin_centres,neff['tracer'][:,-1],label='tracer')
+            # ax[1].set_xlabel(r'$z$',fontsize=15)
+            # ax[1].legend()
+            # ax[1].set_yscale('log')
 
             self.fig = fig
 
@@ -389,13 +381,13 @@ class Plots:
             z_eff_lya = np.sum(zbins * wz_lya)/w_tot_lya
             print('Effective redshift of lya:',z_eff_lya)
 
-            wz_tr = weights['cross'].sum(axis=1)
+            wz_tr = weights['tracer'].sum(axis=1)
             w_tot_tr = np.sum(wz_tr)
             z_eff_tr = np.sum(zbins * wz_tr)/w_tot_tr
-            print('Effective redshift of cross:',z_eff_tr)
+            print('Effective redshift of tracer auto:',z_eff_tr)
             
-            ax[1].plot(zbins,wz_lya,label='lya')
-            ax[1].plot(zbins,wz_tr,label='cross')
+            ax[1].plot(zbins,wz_lya/w_tot_lya,label='lya')
+            ax[1].plot(zbins,wz_tr/w_tot_tr,label='tracer')
             ax[1].set_xlabel(r'$z$',fontsize=15)
             ax[1].set_ylabel(r'$w(z)$',fontsize=15)
             ax[1].legend()
@@ -443,27 +435,31 @@ class Plots:
                     ax.set_ylim(1e-1)
                     ax.set_xlim(3500,6000)
             else:
-                mags = [21,21.5,22,22.5,23]
-                zqs = [2,2.25,2.5,2.75,3,3.25,3.5,3.75,4,4.25,4.5,4.75]
-                lmax = 6000
+                mags = [19,20,21,22]
+                #zqs = [2,2.25,2.5,2.75,3,3.25,3.5,3.75,4,4.25,4.5,4.75]
+                zqs = np.linspace(2,3.5,10)
+                dz = zqs[1]-zqs[0]
+                lmax = 5500
                 lmin = 3600
                 nb = 100
                 snr = np.zeros(nb)
                 snr_z = np.zeros(nb)
                 lam = np.linspace(lmin,lmax,nb)
-                for mag in mags:
+                for k,mag in enumerate(mags):
                     snr = 0
                     for zq in zqs:
                         for i,l in enumerate(lam):
                             snr_z[i] = self._forecast.spectrograph.get_snr_per_ang(mag,zq,l)
                         snr += snr_z/len(zqs)
+                        #snr += snr_z * dz
 
-                    ax.plot(lam,snr,label=f'r={mag}')
+                    ax.plot(lam,gaussian_filter1d(snr,5),label=f'r={mag}',color=plt.cm.Set1(k))
 
             ax.legend(loc='lower left',fontsize=15)
-            ax.set_xlabel(r'SNR per $\AA$',fontsize=15)
-            ax.set_ylabel(r'$\lambda[\AA]$',fontsize=15)
+            ax.set_ylabel(r'SNR per $\AA$',fontsize=15)
+            ax.set_xlabel(r'$\lambda[\AA]$',fontsize=15)
             ax.set_yscale('log')
+            ax.grid(which='both')
         
             self.fig = fig
 
@@ -495,5 +491,37 @@ class Plots:
             "axes.prop_cycle": plt.cycler(color=set1_colours),
         }
 
+        plt.rcParams.update({
+    "text.usetex": False,  # Disable LaTeX (since you can't install it)
+    "mathtext.fontset": "cm",  # Use Computer Modern for math
+    "mathtext.rm": "serif",
+    "mathtext.it": "serif:italic",
+    "mathtext.bf": "serif:bold",
+    
+    "font.family": "serif",  # Use serif font (JCAP style)
+    "font.size": 10,  # General font size
+    "axes.labelsize": 12,  # Axis label font size
+    "axes.titlesize": 12,  # Title font size
+    "xtick.labelsize": 10,  # Tick label size
+    "ytick.labelsize": 10,
+    "legend.fontsize": 10,
+    
+    "axes.linewidth": 1,  # Thicker axis for clarity
+    "xtick.major.size": 5,  # Major tick size
+    "ytick.major.size": 5,
+    "xtick.minor.size": 3,  # Minor tick size
+    "ytick.minor.size": 3,
+    "xtick.major.width": 1,  # Major tick width
+    "ytick.major.width": 1,
+    
+    "lines.linewidth": 1.5,  # Thicker lines for better visibility
+    "lines.markersize": 6,  # Slightly larger markers
+    
+    "figure.figsize": (7, 3.5),  # Double-column width (~7 in) with good aspect ratio
+    "figure.dpi": 300,  # High resolution
+    "savefig.dpi": 300,  # Save high-resolution figures
+    "savefig.format": "pdf",  # Save as vector PDF
+    "savefig.bbox": "tight",  # Remove extra whitespace
+})
         # Apply both the base Seaborn style and customizations
         return plt.style.context(base_style), plt.rc_context(custom_rc)

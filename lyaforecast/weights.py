@@ -127,7 +127,7 @@ class Weights:
 
     def compute_int_1(self,weights):
         """Integral 1 in McDonald & Eisenstein (2007).
-            It represents an effective density of quasars, and it depends
+            It represents an effective density of pixels, and it depends
             on the current value of the weights, that in turn depend on I1.
             We solve these iteratively (converges very fast)."""
         # quasar number density
@@ -173,7 +173,7 @@ class Weights:
     def get_np_eff_lya(self,weights):
         """Effective density of pixels in deg km/s, n_p^eff in McDonald & Eisenstein (2007).
             It is used in constructing the weights as a function of mag."""
-        # get effective density of quasars
+        # get effective density of pixels
         int_1 = self.compute_int_1(weights)
         # number of pixels in a forest
         num_pix = self._forest_length / self._pix_kms
