@@ -4,7 +4,7 @@ import numpy as np
 class AnalyticBias:
     """Class to store analytic formulae for biases of Lya P3D, including non-linear corrections.
         These will later be handled by ForestFlow, currently parameter values are out-of-date."""
-    OPTIONS = ['lya','qso','lbg']
+    OPTIONS = ['lya','qso','lbg','lae']
 
     def __init__(self,cosmo):
         self._cosmo = cosmo
@@ -49,6 +49,11 @@ class AnalyticBias:
             alpha = 1.44
             bias_zref = 3.48
             zref = 2.9
+        elif which=='lae':
+            #From Vanina et al. 2024
+            alpha = 1.44
+            bias_zref = 2.2
+            zref = 2.9
         else:
             raise ValueError(f'invalid biasing: {which}, select from: {self.OPTIONS}')
         
@@ -64,13 +69,16 @@ class AnalyticBias:
         elif which=='qso':
             alpha = 0.0
             zref = 2.33
-            beta_zref = self._growth_rate/self._get_density_bias(zref,which)
+            beta_zref = self._growth_rate/self._get_density_bias(z,which)
         elif which=='lbg':
             alpha = 0.0
             zref = 2.7
-            beta_zref = self._growth_rate/self._get_density_bias(zref,which)
-
-            #to fix: growth-rate here is estimated at zref set by camb config, that won't be the same as both 2.33 and 2.7.
+            beta_zref = self._growth_rate/self._get_density_bias(z,which)
+        elif which=='lae':
+            alpha = 0.0
+            zref = 2.7
+            beta_zref = self._growth_rate/self._get_density_bias(z,which)
+            #to fix: growth-rate here is estimated at zref set by camb config. Maybe it's ok, given we evolve P_L.
 
         else:
             raise ValueError(f'invalid biasing: {which}, select from: {self.OPTIONS}')

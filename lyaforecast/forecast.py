@@ -94,10 +94,11 @@ class Forecast:
             self.covariance.compute_cross_power_variance(0.14, 0.6)
 
             weights_lya[iz] = self.covariance._w_lya
-            weights_tracer[iz] = self.covariance._w_tracer
-            eff_vol_z[iz] = self.covariance._compute_tracer_eff_vol(0.14, 0.6)
-            neff_lya[iz] =  self.covariance.weights.get_np_eff_lya(self.covariance._w_lya)
+            weights_tracer[iz] = self.covariance._w_tracer 
+
+            neff_lya[iz] =  self.covariance.get_neff_2D_lya(0.14, 0.6)
             neff_tracer[iz] = self.covariance.weights.get_n_tracer()
+
 
             bin_lengths[iz] = self.covariance._get_redshift_depth()
 
@@ -112,7 +113,32 @@ class Forecast:
             return neffs
         else:
             return z_bin_centres, weights, eff_vol_z
+        
 
+    def compute_eff_vol(self):
+            
+        eff_vols = {}
+        eff_vol_lya = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
+        eff_vol_tr = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
+
+        z_bin_edges,z_bin_centres = self._get_z_bins()
+
+        for iz, zc in enumerate(z_bin_centres):
+            lmin = self.cosmo.LYA_REST * (1 + z_bin_edges[0,iz])
+            lmax = self.cosmo.LYA_REST * (1 + z_bin_edges[1,iz])
+            
+            self.covariance(lmin, lmax)
+            self.covariance.compute_eff_density_and_noise()
+
+            eff_vol_lya[iz] = self.covariance._compute_lya_eff_vol(0.14, 0.6) / self.covariance.get_survey_volume()
+            eff_vol_tr[iz] = self.covariance._compute_tracer_eff_vol(0.14, 0.6) / self.covariance.get_survey_volume()
+
+        eff_vols['lya'] = eff_vol_lya
+        eff_vols['tracer'] = eff_vol_tr
+
+        return eff_vols
+
+            
 
     def _get_z_bins(self):
         if self.config['survey'].get('z bin centres', None) is not None:
@@ -527,28 +553,30 @@ class Forecast:
 
     def combine_BAO(self,dx1, dx2, rho):
         """
-        Combine two BAO measurements (centred at 1) from different tracers, with correlation coefficient rho. This is a crude approximation, 
+        Combine two BAO measurements (centred at 1) from different tracers, with correlation coefficient rho. This is a high noise approximation, 
         to be replaced by a full Fisher covariance matrix.
         
         Returns:
             dx_combined: uncertainty of the combined result
         """
         # Covariance matrix
-        C = np.array([
-            [dx1**2, rho * dx1 * dx2],
-            [rho * dx1 * dx2, dx2**2]
-        ])
+        # C = np.array([
+        #     [dx1**2, rho * dx1 * dx2],
+        #     [rho * dx1 * dx2, dx2**2]
+        # ])
 
-        # Inverse covariance matrix
-        C_inv = np.linalg.inv(C)
+        # # Inverse covariance matrix
+        # C_inv = np.linalg.inv(C)
 
-        # Weight vector
-        ones = np.ones(2)
+        # # Weight vector
+        # ones = np.ones(2)
 
-        # Combined value and uncertainty
-        dx_combined = np.sqrt(1 / (ones @ C_inv @ ones))
+        # # Combined value and uncertainty
+        # dx_combined = (1 / (ones @ C_inv @ ones))
 
-        return dx_combined
+        dx_comb = 1 / (1 / dx1 + 1 / dx2)
+
+        return dx_comb
 
 
 

@@ -6,7 +6,7 @@ class Covariance:
         Different redshift bins are treated as independent, and right
         now this object only deals with one redshift bin at a time."""
     
-    TRACER_OPTIONS = ['qso','lbg']
+    TRACER_OPTIONS = ['qso','lbg','lae']
     def __init__(self, config, cosmo, survey, spectrograph, power_spectrum):
 
         # Config
@@ -181,6 +181,48 @@ class Covariance:
         self._w_tracer = self.weights.compute_tracer_weights(self._tracer)   
         # quasar shot noise (deg^2 km/s)
         self._tracer_noise_power = 1 / self.weights.get_n_tracer()
+
+    def get_neff_2D_lya(self,k_hmpc,mu):
+        """Effective 2D density of lya forest skewers, as defined in McQuinn and White 2014.
+        1 / n_eff^2D = P_w + P_N / P1D"""
+
+        z = self._mean_z()
+
+        # decompose into line of sight component
+        dkms_dmpch = self._cosmo.velocity_from_distance(z)
+        kp_hmpc = k_hmpc * mu
+        # transform from comoving to observed coordinates
+        kp_kms = kp_hmpc / dkms_dmpch
+        
+        p1d = self._power_spec.compute_p1d_kms(z,kp_kms,self._res_kms,self._pix_kms)
+        neff_2D_inv = self._aliasing_weights + self._effective_noise_power / p1d
+
+        return 1 / neff_2D_inv
+    
+    def _compute_lya_eff_vol(self,k_hmpc,mu):
+        """Effective 2D density of lya forest skewers, as defined in McQuinn and White 2014.
+        1 / n_eff^2D = P_w + P_N / P1D"""
+
+        z = self._mean_z()
+
+        # decompose into line of sight component
+        dkms_dmpch = self._cosmo.velocity_from_distance(z)
+        kp_hmpc = k_hmpc * mu
+        # transform from comoving to observed coordinates
+        kp_kms = kp_hmpc / dkms_dmpch
+
+        neff_2d = self.get_neff_2D_lya(k_hmpc,mu) / self._cosmo.distance_from_degrees(z)**2 
+
+        vol_hmpc = self.get_survey_volume()
+
+        p3d = self._power_spec.compute_p3d_hmpc(z, k_hmpc, mu, 'lya')
+
+        dkms_dmpch = self._cosmo.velocity_from_distance(z)
+        p1d = self._power_spec.compute_p1d_kms(z,kp_kms,self._res_kms,self._pix_kms) / dkms_dmpch
+        
+        eff_vol = vol_hmpc * (p3d / (p3d + p1d / neff_2d ))**2
+
+        return eff_vol
 
     def _compute_total_lya_power(self,z,kt_deg,kp_kms):
         """Sum of 3D Lya power, aliasing and effective noise power in deg2kms"""
@@ -362,4 +404,57 @@ class Covariance:
             power_var = power_var[-1]
 
         return power_var
+
+
+    # def compute_tracer_cross_power_variance(self,k_hmpc,mu
+    #                     ):
+    #     """Variance of Lya-tracer cross-power, in units of (Mpc/h)^3.
+    #         From eq.34 of McQuinn and White (2011).
+    #         Note that here -1 < mu < 1.
+    #        """
+    #     z = self._mean_z()
+    #     # decompose into line of sight and transverse components
+    #     dkms_dhmpc = self._cosmo.velocity_from_distance(z)
+    #     dhmpc_ddeg = self._cosmo.distance_from_degrees(z)
+    #     kp_hmpc = k_hmpc * mu
+    #     kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
+    #     kp_kms = kp_hmpc / dkms_dhmpc
+    #     kt_deg = kt_hmpc * dhmpc_ddeg
+
+    #     #cross
+    #     _tracer_name = self._tracer1 + '_' + self._tracer2
+    #     tracer_cross = self._power_spec.compute_p3d_hmpc(z,k_hmpc,mu,which=_tracer_name)
+
+    #     #tracer auto
+    #     tracer1_auto = self._power_spec.compute_p3d_hmpc(z,k_hmpc,mu,which=self._tracer1)
+    #     tracer2_auto = self._power_spec.compute_p3d_hmpc(z,k_hmpc,mu,which=self._tracer2)
+        
+    #     #dn/ddeg2dkm/s to dn/dhmpc^3
+    #     dn_dkmsddeg2_tracer1 = self.weights.get_n_tracer(self._tracer1)
+    #     dn_dhmpc3_tracer1 = dn_dkmsddeg2_tracer1 / dhmpc_ddeg**2 * dkms_dhmpc
+    #     noise_tracer1 = 1 / dn_dhmpc3_tracer1
+
+    #     dn_dkmsddeg2_tracer2 = self.weights.get_n_tracer(self._tracer2)
+    #     dn_dhmpc3_tracer2 = dn_dkmsddeg2_tracer2 / dhmpc_ddeg**2 * dkms_dhmpc
+    #     noise_tracer2 = 1 / dn_dhmpc3_tracer2
+
+    #     #var cross
+    #     var_tracer_cross = tracer_cross**2 + (tracer1_auto + noise_tracer1) * (tracer2_auto + noise_tracer2)
+
+    #     self._w_cross = abs(tracer_cross) / (abs(tracer_cross) + var_tracer_cross)
+
+    #     # survey volume in units of (Mpc/h)^3
+    #     volume_mpch = self.get_survey_volume()
+
+    #     #num modes
+    #     num_modes = volume_mpch * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / (2 * np.pi**2)
+
+    #     # not sure if there should be a factor of 2 here.
+    #     power_var = 2 * var_tracer_cross / num_modes
+    #     if not self.per_mag:
+    #         power_var = power_var[-1]
+
+    #     return power_var
+
+
 

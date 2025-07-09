@@ -9,7 +9,7 @@ from scipy.ndimage import gaussian_filter1d
 class Survey:
 
     BAND_OPTIONS = ['r']
-    TRACER_OPTIONS = ['qso','lbg']
+    TRACER_OPTIONS = ['qso','lbg','lae']
 
     def __init__(self,config):
         #survey area
@@ -116,7 +116,7 @@ class Survey:
         z = np.unique(z)
         m = np.unique(m)
 
-        #scale density of quasars to desired number. By default given staright from QLF
+        #scale density of quasars to desired number. By default taken straight from QLF
         if self.tracer_density is not None:
             #re-scale based on lya qso requirements
             if self.tracer == 'qso':
@@ -141,7 +141,7 @@ class Survey:
         self._tracer_mmin = m[0] #- 0.5*dm
         self._tracer_mmax = m[-1] #+ 0.5*dm
 
-        if self.tracer == 'lbg':
+        if (self.tracer == 'lbg')|(self.tracer == 'lae'):
             #smooth (currently) noisy dndz
             sigma_smooth = 1.5
             tdNdmdzddeg2 = gaussian_filter1d(tdNdmdzddeg2,sigma_smooth,axis=0)

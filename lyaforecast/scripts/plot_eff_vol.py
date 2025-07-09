@@ -1,36 +1,87 @@
 #!/usr/bin/env python
+"""Plot effective densities of measurements. For Lya it's the 2D effective density defined by McQuinn and White 2011. For tracers it's just the 3D density."""
+
 import argparse
 from lyaforecast import Forecast
 from lyaforecast.plots import Plots
-import matplotlib.pyplot as plt
 
 def main():
-    args = get_args()
+    raise ValueError
+
+def from_script(args):
+    import numpy as np 
+    import matplotlib.pyplot as plt
 
     with _make_style()[0], _make_style()[1]: 
         fig,ax = plt.subplots(1,2,figsize=(20,6))
         linestyles=['solid','dashed']
-        labels = ['']
 
     for j,cfg in enumerate(args.config):
         forecast = Forecast(cfg)
 
-        z_bin_centres,_,n_pk_z_lya,n_pk_z_tracer = forecast.compute_pk()
-            
-        ax[0].plot(z_bin_centres,n_pk_z_lya,linestyle=linestyles[j])
-        ax[1].plot(z_bin_centres,n_pk_z_tracer,linestyle=linestyles[j])
+        if forecast._lya_tracer == 'qso':
+                lab_lya = r'Ly$\alpha$(QSO)$^\mathrm{auto}$'
+                if forecast.survey.area_deg2 == 14000:
+                    lab_lya = r'Ly$\alpha$(QSO)$^\mathrm{auto}$ (DESI)'
+        elif forecast._lya_tracer == 'lbg':
+                lab_lya = r'Ly$\alpha$(LBG)$^\mathrm{auto}$'
 
-    ax[0].set_xlabel(fr'z')
-    ax[0].set_ylabel(r'$nP^{(\rm Ly\alpha)}(k=0.14,\mu=0.6)$')
-    ax[0].grid()
-    ax[0].set_yscale('linear')
+        if forecast._tracer == 'qso':
+                lab_tr = r'QSO$^\mathrm{auto}$'
+        elif forecast._tracer == 'lbg':
+                lab_tr = r'LBG$^\mathrm{auto}$'
+        elif forecast._tracer == 'lae':
+                lab_tr = r'LAE$^\mathrm{auto}$'
 
-    ax[1].set_xlabel(fr'z')
-    ax[1].set_ylabel(r'$nP^{(\rm Tracer)}(k=0.14,\mu=0.6)$')
-    ax[1].grid()
-    ax[1].set_yscale('linear')
-            
-    fig.savefig(forecast.out_folder.joinpath('np_z.png'))
+
+        vol_eff = forecast.compute_eff_vol()
+
+        lim = 18
+        ulim = 26
+        ylim = 1e-3
+        yulim = 1e-1
+        w = forecast.survey.maglist > lim
+        w &= forecast.survey.maglist < ulim
+
+        if forecast._lya_tracer == 'lbg':
+            w = forecast.survey.maglist > 22
+            w &= forecast.survey.maglist < ulim
+
+        colours = ['blue','green','red']
+        for i,zbc in enumerate(forecast.survey.z_bin_centres):
+
+            print(f'Plotting effective volume for z={zbc}')
+
+            ne_i = (vol_eff['lya'][i][w])
+            n_i_tr = (vol_eff['tracer'][i][w])
+
+            ax[0].plot(forecast.survey.maglist[w],ne_i,alpha=0.8,color=colours[j],label=lab_lya,linestyle=linestyles[i])
+            ax[1].plot(forecast.survey.maglist[w],n_i_tr,alpha=0.8,color=colours[j],label=lab_tr,linestyle=linestyles[i])
+
+            if i == 0:
+                ax[0].legend(loc='upper left',fontsize=18)
+                ax[1].legend(loc=2,fontsize=18)
+
+        ax[0].set_xlim(20,)
+        ax[0].set_ylim(ylim,)
+        ax[0].set_xlabel(r'$r_{\rm max}$',fontsize=18)
+        ax[0].set_ylabel(r'${\rm V}_{\rm eff,\alpha}/V_s$',fontsize=18)
+        ax[0].set_yscale('log')
+
+        
+        ax[1].set_xlim(20,)
+        ax[0].set_ylim(ylim,)
+        ax[1].set_xlabel(r'$r_{\rm max}$',fontsize=18)
+        ax[1].set_ylabel(r'${\rm V}_{\rm eff,tracer}/V_s$',fontsize=18)
+        ax[1].set_yscale('log')
+
+        ax[0].grid(which='both')
+        ax[1].grid(which='both')
+
+    fig.savefig(forecast.out_folder.joinpath('vol_eff.png'))
+
+
+
 
 def _make_style(style='seaborn-1'):
         import matplotlib.pyplot as plt
@@ -95,7 +146,7 @@ def _make_style(style='seaborn-1'):
 })
         # Apply both the base Seaborn style and customizations
         return plt.style.context(base_style), plt.rc_context(custom_rc)
-
+    
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
                 formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -103,14 +154,13 @@ def get_args() -> argparse.Namespace:
 
     parser.add_argument('--config', '-i',
                         type=str, 
-                        default=None, 
-                        nargs='+',
+                        default=None,
+                        nargs='+', 
                         help='Config file')
 
     args = parser.parse_args()
     return args
 
 if __name__ == "__main__":
-    main()
-
-
+    args = get_args()
+    from_script(args)

@@ -25,10 +25,19 @@ def plot_da_h_z(forecast_data):
     with _make_style()[0], _make_style()[1]: 
         fig,ax = plt.subplots(2,2,figsize=(25,18))
 
-        colours = ['blue','green']
-        labels = ['LBG','QSO']
+        colours = ['blue','green','red','cyan']
+        labels = ['LBG','QSO','LAE']
+        labels_detailed = np.array([[r'Ly$\alpha$(LBG)$^\mathrm{auto}$',r'Ly$\alpha$(QSO)$^\mathrm{auto}$','',''],
+                           [r'LBG$^\mathrm{auto}$','',r'LAE$^\mathrm{auto}$',''],
+                           [r'Ly$\alpha$(LBG)$^\mathrm{cross}$',r'Ly$\alpha$(QSO)xLBG',r'Ly$\alpha$(LBG)xLAE',r'Ly$\alpha$(QSO)xLAE'],
+                           [r'Ly$\alpha$(LBG)$^\mathrm{auto+cross}$','','','']])
+        
+        alphas = np.array([[0.5,0.5,0,0],
+                  [0.5,0,0.5,0],
+                  [0.5,0.5,0.5,0.5],
+                  [0.5,0,0,0]])
+        
         for i,data in enumerate(forecast_data):
-
             ap_lya = data['ap_err_lya_z'] * 100
             at_lya = data['at_err_lya_z'] * 100
             ap_tr = data['ap_err_tracer_z'] * 100
@@ -39,32 +48,32 @@ def plot_da_h_z(forecast_data):
             at_comb = data['at_err_comb_z'] * 100
             zs = data['redshifts']
 
-            if i==1:
-                # ax[0,0].plot(zs,ap_lya,alpha=0.5,color=colours[i],label=labels[i])
-                # ax[0,0].plot(zs,at_lya,linestyle='dashed',alpha=0.5,color=colours[i])
-                ax[1,0].plot(zs,ap_cross,alpha=0.5,color='red',label=r'Ly$\alpha$(QSO)xLBG')
-                ax[1,0].plot(zs,at_cross,linestyle='dashed',alpha=0.5,color='red')
-                continue
+            # if i==1:
+            #     # ax[0,0].plot(zs,ap_lya,alpha=0.5,color=colours[i],label=labels[i])
+            #     # ax[0,0].plot(zs,at_lya,linestyle='dashed',alpha=0.5,color=colours[i])
+            #     ax[1,0].plot(zs,ap_cross,alpha=0.5,color='red',label=r'Ly$\alpha$(QSO)xLBG')
+            #     ax[1,0].plot(zs,at_cross,linestyle='dashed',alpha=0.5,color='red')
+            #     continue
 
-            ax[0,0].plot(zs,ap_lya,alpha=0.5,color=colours[i],label=r'$\alpha_\parallel$')
-            ax[0,0].plot(zs,at_lya,linestyle='dashed',alpha=0.5,color=colours[i],label=r'$\alpha_\perp$')
+            ax[0,0].plot(zs,ap_lya,alpha=alphas[0,i],color=colours[i],label=labels_detailed[0,i])#label=r'$\alpha_\parallel$')
+            ax[0,0].plot(zs,at_lya,linestyle='dashed',alpha=alphas[0,i],color=colours[i])#label=r'$\alpha_\perp$')
 
-            ax[0,1].plot(zs,ap_tr,alpha=0.5,color=colours[i])
-            ax[0,1].plot(zs,at_tr,linestyle='dashed',alpha=0.5,color=colours[i])
+            ax[0,1].plot(zs,ap_tr,alpha=alphas[1,i],color=colours[i],label=labels_detailed[1,i])
+            ax[0,1].plot(zs,at_tr,linestyle='dashed',alpha=alphas[1,i],color=colours[i])
 
-            ax[1,0].plot(zs,ap_cross,alpha=0.5,color=colours[i])
-            ax[1,0].plot(zs,at_cross,linestyle='dashed',alpha=0.5,color=colours[i])
+            ax[1,0].plot(zs,ap_cross,alpha=alphas[2,i],color=colours[i],label=labels_detailed[2,i])
+            ax[1,0].plot(zs,at_cross,linestyle='dashed',alpha=alphas[2,i],color=colours[i])
 
             #combined lya auto and lya-qso cross.
 
-            ax[1,1].plot(zs,ap_comb,alpha=0.5,color=colours[i])
-            ax[1,1].plot(zs,at_comb,linestyle='dashed',alpha=0.5,color=colours[i])
+            ax[1,1].plot(zs,ap_comb,alpha=alphas[3,i],color=colours[i],label=labels_detailed[3,i])
+            ax[1,1].plot(zs,at_comb,linestyle='dashed',alpha=alphas[3,i],color=colours[i])
 
 
             ax[1,0].set_xlabel(fr'$z$')
             ax[1,1].set_xlabel(fr'$z$')
-            ax[0,0].set_ylabel(f'% error')
-            ax[1,0].set_ylabel(f'% error')
+            ax[0,0].set_ylabel(fr'% error ($dz=0.1$)')
+            ax[1,0].set_ylabel(fr'% error ($dz=0.1$)')
 
         ax[0,0].legend()
         ax[0,1].legend()

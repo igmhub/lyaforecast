@@ -171,7 +171,7 @@ class Weights:
         return int_3
 
     def get_np_eff_lya(self,weights):
-        """Effective density of pixels in deg km/s, n_p^eff in McDonald & Eisenstein (2007).
+        """Effective density of pixels in 1 / deg^2 km/s, n_p^eff in McDonald & Eisenstein (2007).
             It is used in constructing the weights as a function of mag."""
         # get effective density of pixels
         int_1 = self.compute_int_1(weights)
