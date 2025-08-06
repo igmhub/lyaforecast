@@ -5,3 +5,5 @@ lyaforecast/**/*.pyc
 build/
 *.egg-info/
 **.DS_Store
+tests/*
+tests/

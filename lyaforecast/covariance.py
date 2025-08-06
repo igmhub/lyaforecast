@@ -234,6 +234,14 @@ class Covariance:
         total_power = p3d + aliasing + noise
 
         return total_power
+    
+    def compute_aliasing(self,z,kt_deg,kp_kms):
+
+        p1d = self._power_spec.compute_p1d_kms(z,kp_kms,self._res_kms,self._pix_kms)
+        aliasing = self._aliasing_weights[-1] * p1d
+        
+        return aliasing 
+                    
 
     def compute_3d_power_variance(self,k_hmpc,mu
                         ):
@@ -268,7 +276,7 @@ class Covariance:
         # use 0 < mu < 1 and they used -1 < mu < 1
         num_modes = vol_hmpc * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / (2 * np.pi**2)
         power_variance = 2 * total_power_hmpc**2 / num_modes
-
+        
         # self._w_lya = self.weights._p3d_w / (self.weights._p3d_w + power_variance)
 
         #If not per magnitude, return power var for mmax only. 

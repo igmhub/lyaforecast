@@ -1,6 +1,6 @@
 import numpy as np
 import camb
-from lyaforecast.utils import get_file, get_pk_smooth
+from lyaforecast.utils import get_file
 
 class CosmoCamb:
     """Compute cosmological functions using CAMB"""
@@ -33,28 +33,12 @@ class CosmoCamb:
         self.results = camb.get_results(self._pars)
 
         self.growth_rate = self.results.get_fsigma8()[0] / self.results.get_sigma8()[0]
-
-        # peak component of Pl
-        self._kh,_,pk = self.results.get_matter_power_spectrum(minkh=1e-4,
-                            maxkh=1.1525e3,npoints=814)
         
-        self._pk_smooth = get_pk_smooth(self.results,self._kh,pk[0,:])
-
-        self._pk_peak = pk[0,:] - self._pk_smooth
-
     def get_pk_lin(self,k,kmin=1.e-4,kmax=1.e1,npoints=1000):
         """Return linear power interpolator in units of h/Mpc, at zref"""
         kh,_,pk = self.results.get_matter_power_spectrum(minkh=kmin,
                                                 maxkh=kmax,npoints=npoints)
         return np.interp(k,kh,pk[0,:])
-    
-    def get_pk_lin_smooth(self,k):
-        """Return peak component of linear power interpolator in units of h/Mpc, at zref"""
-        return np.interp(k,self._kh,self._pk_smooth)
-    
-    def get_pk_lin_peak(self,k):
-        """Return peak component of linear power interpolator in units of h/Mpc, at zref"""
-        return np.interp(k,self._kh,self._pk_peak)
 
     def velocity_from_distance(self,z):
         """Conversion factor from Mpc/h to km/s, at redshift z."""

@@ -1,17 +1,20 @@
-"""Control module for lyaforecast"""
+"""Control module for lyaforecast. Should be structured as follows: 
+    -   we use Covariance class for each config, and store observed powers and INDIVIDUAL covariances in ?dictionaries?
+    - Then, using the Fisher class, we compute the parameter measurements 
+
+"""
 import configparser
-import numpy as np
 import time 
 from pathlib import Path
+import logging
 
-from lyaforecast.utils import get_file, get_pk_smooth
-from lyaforecast.cosmoCAMB import CosmoCamb
-from lyaforecast.spectrograph import Spectrograph
-from lyaforecast.survey import Survey
-from lyaforecast.covariance import Covariance
-from lyaforecast.power_spectrum import PowerSpectrum
-from lyaforecast.plots import Plots
+import numpy as np
 
+from lyaforecast import (
+    CosmoCamb, Covariance, Spectrograph,
+    Survey, PowerSpectrum, get_file, 
+    setup_logger
+)
 
 class Forecast:
     """Main LyaForecast class.
@@ -28,6 +31,9 @@ class Forecast:
             Path to main.ini config file
         """
         init_start_time = time.time()
+
+        print('Initialise forecast')
+
         # Read config files
         self.config = configparser.ConfigParser()
         self.config.optionxform = lambda option: option
@@ -46,7 +52,6 @@ class Forecast:
         self._cross_flag = self.config['control'].getboolean('cross')
         self._tracer_auto_flag = self.config['control'].getboolean('tracer auto')
 
-        print('Initialise forecast')
         #initialise cosmology
         self.cosmo = CosmoCamb(self.config['cosmo'].get('filename'),
                                 self.config['cosmo'].getfloat('z_ref', None))
@@ -65,226 +70,13 @@ class Forecast:
         self.covariance = Covariance(self.config, self.cosmo, self.survey, 
                                      self.spectrograph, self.power_spec)
         
-        init_end_time = time.time()
-        print(f"Forecast initialized in {init_end_time - init_start_time:.4f} seconds.")
+        #init_end_time = time.time()
+        #print(f"Forecast initialized in {init_end_time - init_start_time:.4f} seconds.")
 
-    def compute_weights(self,compute_neff=False):
-        """
-        Compute weights as a function of magnitude and mean redshift
-        """
-        weights = {}
-        neffs = {}
-
-        weights_lya = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-        weights_tracer = np.zeros_like(weights_lya)
-        eff_vol_z = np.zeros_like(weights_lya)
-        neff_lya = np.zeros_like(weights_lya)
-        neff_tracer = np.zeros_like(weights_lya)
-        bin_lengths = np.zeros(self.survey.num_z_bins)
-
-        z_bin_edges,z_bin_centres = self._get_z_bins()
-
-        for iz, zc in enumerate(z_bin_centres):
-            lmin = self.cosmo.LYA_REST * (1 + z_bin_edges[0,iz])
-            lmax = self.cosmo.LYA_REST * (1 + z_bin_edges[1,iz])
-
-            self.covariance(lmin, lmax)
-            self.covariance.compute_eff_density_and_noise()
-            # self.covariance.compute_3d_power_variance(0.14, 0.6)
-            self.covariance.compute_cross_power_variance(0.14, 0.6)
-
-            weights_lya[iz] = self.covariance._w_lya
-            weights_tracer[iz] = self.covariance._w_tracer 
-
-            neff_lya[iz] =  self.covariance.get_neff_2D_lya(0.14, 0.6)
-            neff_tracer[iz] = self.covariance.weights.get_n_tracer()
-
-
-            bin_lengths[iz] = self.covariance._get_redshift_depth()
-
-        weights['lya'] = weights_lya
-        weights['tracer'] = weights_tracer
-
-        neffs['lya'] = neff_lya
-        neffs['tracer'] = neff_tracer
-        neffs['bin_lengths'] = bin_lengths
-        
-        if compute_neff:
-            return neffs
-        else:
-            return z_bin_centres, weights, eff_vol_z
-        
-
-    def compute_eff_vol(self):
-            
-        eff_vols = {}
-        eff_vol_lya = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-        eff_vol_tr = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-
-        z_bin_edges,z_bin_centres = self._get_z_bins()
-
-        for iz, zc in enumerate(z_bin_centres):
-            lmin = self.cosmo.LYA_REST * (1 + z_bin_edges[0,iz])
-            lmax = self.cosmo.LYA_REST * (1 + z_bin_edges[1,iz])
-            
-            self.covariance(lmin, lmax)
-            self.covariance.compute_eff_density_and_noise()
-
-            eff_vol_lya[iz] = self.covariance._compute_lya_eff_vol(0.14, 0.6) / self.covariance.get_survey_volume()
-            eff_vol_tr[iz] = self.covariance._compute_tracer_eff_vol(0.14, 0.6) / self.covariance.get_survey_volume()
-
-        eff_vols['lya'] = eff_vol_lya
-        eff_vols['tracer'] = eff_vol_tr
-
-        return eff_vols
-
-            
-
-    def _get_z_bins(self):
-        if self.config['survey'].get('z bin centres', None) is not None:
-            z_bin_centres = np.array(self.config['survey'].get('z bin centres').split(",")).astype(float)
-            dz = np.zeros(z_bin_centres.size)
-            dz[1:-1] = (z_bin_centres[2:] - z_bin_centres[:-2]) / 2.
-            dz[0] = z_bin_centres[1] - z_bin_centres[0]
-            dz[-1] = z_bin_centres[-1] - z_bin_centres[-2]
-            z_bin_edges = np.array([z_bin_centres - dz / 2, z_bin_centres + dz / 2])
-        else:
-            z_list = np.linspace(self.survey.zmin, self.survey.zmax, self.survey.num_z_bins + 1)
-            z_bin_edges = np.array([[z_list[i], z_list[i + 1]] for i in range(self.survey.num_z_bins)]).T
-            z_bin_centres = z_bin_edges.mean(axis=0)
-
-        return z_bin_edges, z_bin_centres
-
-    def compute_neff(self):
-        """Compute effective number density of pixels, or tracers,
-        defined in McDonald & Eisenstein (2007),
-          as function of magnitude and mean redshift"""
-
-        neff = self.compute_weights(compute_neff=True)
-
-        return neff
-    
-    def compute_zeff(self):
-        """Compute effective redshift of measurements"""
-        z_bin_edges,z_bin_centres = self._get_z_bins()
-
-        w_lya = np.zeros(z_bin_centres.size)
-        w_cross = np.zeros(z_bin_centres.size)
-        w_tracer = np.zeros(z_bin_centres.size)
-
-        for iz, zc in enumerate(z_bin_centres):
-            lmin = self.cosmo.LYA_REST * (1 + z_bin_edges[0,iz])
-            lmax = self.cosmo.LYA_REST * (1 + z_bin_edges[1,iz])
-
-            self.covariance(lmin, lmax)
-            self.covariance.compute_eff_density_and_noise()
-            # self.covariance.compute_3d_power_variance(0.14, 0.6)
-            self.covariance.compute_cross_power_variance(0.14, 0.6)
-
-            w_lya[iz] = sum(self.covariance._w_lya)
-            w_cross[iz] = sum(self.covariance._w_cross)
-            w_tracer[iz] = sum(self.covariance._w_tracer)
-        
-        z_eff_lya = np.sum(z_bin_centres * w_lya)/sum(w_lya)
-        z_eff_cross = np.sum(z_bin_centres * w_cross)/sum(w_cross)
-        z_eff_tracer = np.sum(z_bin_centres * w_tracer)/sum(w_tracer)
-
-        z_eff_lya_cross = np.sum(z_bin_centres * w_lya*w_cross)/(sum(w_lya*w_cross))
-
-        print('zeff lya: ',round(z_eff_lya,3))
-        print('zeff cross: ',round(z_eff_cross,3))
-        print('zeff tracer: ',round(z_eff_tracer,3))
-        print('zeff lya+cross: ',round(z_eff_lya_cross,3))
-
-
-
-    def compute_survey_volume(self):
-        """Compute survey volume (Mpc/h) as a function of redshift"""
-        survey_volume = np.zeros(self.survey.num_z_bins)
-
-        z_bin_edges,z_bin_centres = self._get_z_bins()
-        for iz, zc in enumerate(z_bin_centres):
-            lmin = self.cosmo.LYA_REST * (1 + z_bin_edges[0,iz])
-            lmax = self.cosmo.LYA_REST * (1 + z_bin_edges[1,iz])
-
-            self.covariance(lmin, lmax)
-            survey_volume[iz] = self.covariance.get_survey_volume()
-
-        return survey_volume, z_bin_centres
-
-    def compute_pk(self):
-        """Compute snr per mode for k=0.14h/Mpc, mu=0.6"""
-
-        z_bin_centres, p3d_info, n_pk_lya, n_pk_qso = self._compute_pk()
-
-        return z_bin_centres, p3d_info, n_pk_lya, n_pk_qso
-
-
-    def _compute_pk(self):
-        """Compute snr per mode for k=0.14h/Mpc, mu=0.6"""
-
-        p3d_z_k_mu = np.zeros((self.survey.num_z_bins,
-                             self.power_spec._num_k_bins,
-                             self.power_spec._num_mu_bins-1))
-        p3d_var_z_k_mu = np.zeros_like(p3d_z_k_mu)
-        p3d_tracer_z_k_mu = np.zeros_like(p3d_z_k_mu)
-        p3d_tracer_var_z_k_mu = np.zeros_like(p3d_z_k_mu)
-
-        p3d_info = {}
-
-        n_pk_z_lya = np.zeros(self.survey.num_z_bins)
-        n_pk_z_tr = np.zeros(self.survey.num_z_bins)
-
-        z_bin_edges,z_bin_centres = self._get_z_bins()
-        for iz, zc in enumerate(z_bin_centres):
-            lmin = self.cosmo.LYA_REST * (1 + z_bin_edges[0,iz])
-            lmax = self.cosmo.LYA_REST * (1 + z_bin_edges[1,iz])
-
-            self.covariance(lmin, lmax)
-
-            # some survey settings
-            pix_width = self.covariance._pix_kms
-            resolution = self.covariance._res_kms
-
-            #weighting
-            self.covariance.compute_eff_density_and_noise()
-
-            n_pk_z_lya[iz], n_pk_z_tr[iz] = self.covariance.compute_n_pk(0.14, 0.6)
-
-            for i, mu in enumerate(self.power_spec.mu):
-                p3d = np.array([self.power_spec.compute_p3d_hmpc_smooth(zc, k,
-                                                 mu, pix_width, resolution, 'lya') 
-                                        for k in self.power_spec.k]) # (Mpc/h)**3
-                
-                p3d_tracer = np.array([self.power_spec.compute_p3d_hmpc_smooth(zc, k,
-                                            mu, pix_width, resolution, self._tracer) 
-                                        for k in self.power_spec.k]) 
-
-                p3d_var = np.array([self.covariance.compute_3d_power_variance(k,mu) 
-                                    for k in self.power_spec.k]) # (Mpc/h)**6
-                
-                p3d_tracer_var = np.array([self.covariance.compute_tracer_power_variance(k,mu) 
-                                    for k in self.power_spec.k])
-                
-                p3d_z_k_mu[iz,:,i] = p3d
-                p3d_tracer_z_k_mu[iz,:,i] = p3d_tracer
-
-                p3d_var_z_k_mu[iz,:,i] = p3d_var
-                p3d_tracer_var_z_k_mu[iz,:,i] = p3d_tracer_var
-
-        p3d_info['p_lya'] = p3d_z_k_mu
-        p3d_info['p_tracer'] = p3d_tracer_z_k_mu
-        p3d_info['var_lya'] = p3d_var_z_k_mu
-        p3d_info['var_tracer'] = p3d_tracer_var_z_k_mu
-
-        return z_bin_centres, p3d_info, n_pk_z_lya, n_pk_z_tr
-
-    def run_bao_forecast(self):
-        print('Running BAO forecast')
-
-        # areas = np.array(self.survey.area_deg2)
-        # resolutions = np.array(self.survey.res_kms)
-        # qso_densities = np.array(self.survey.qso_density)
+    def run_forecast(self):
+        #setup logger
+        logger = setup_logger(self.out_folder)
+        logger.info('Running BAO forecast')
 
         if self.covariance.per_mag:
             sigma_dh_lya = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
@@ -307,13 +99,13 @@ class Forecast:
             sigma_dh_lya_lya_lya_tracer = np.zeros(self.survey.num_z_bins)
             corr_coef = np.zeros(self.survey.num_z_bins)
 
-        z_bin_edges,z_bin_centres = self._get_z_bins()
-        for iz, zc in enumerate(z_bin_centres):
-            print(f"z bin = [{z_bin_edges[0,iz]}-{z_bin_edges[1,iz]}], bin centre = {zc}")
+        for iz, zc in enumerate(self.survey.z_bin_centres):
+            logger.info(f"z bin = [{self.survey.z_bin_edges[iz,0]}-"
+                        f"{self.survey.z_bin_edges[iz,1]}], bin centre = {zc}")
 
             # observed wavelength range from redshift limits
-            lmin = self.cosmo.LYA_REST * (1 + z_bin_edges[0,iz])
-            lmax = self.cosmo.LYA_REST * (1 + z_bin_edges[1,iz])
+            lmin = self.cosmo.LYA_REST * (1 + self.survey.z_bin_edges[iz,0])
+            lmax = self.cosmo.LYA_REST * (1 + self.survey.z_bin_edges[iz,1])
 
             #call function, setting bin width
             self.covariance(lmin,lmax)
@@ -438,13 +230,9 @@ class Forecast:
                     fr', ap (lyaxlya + lyaxtr)={sigma_dh_combined_comb}')
        
         data = {}
-        data["redshifts"] = z_bin_centres
+        data["redshifts"] = self.survey.z_bin_centres
         data["mean redshift"] = self.cosmo.z_ref
         data["magnitudes"] = {self.survey.band:self.survey.maglist}
-        # data["at_err_lya"] = sigma_da_combined
-        # data["ap_err_lya"] = sigma_dh_combined
-        # data["at_err_cross"] = sigma_da_combined
-        # data["ap_err_cross"] = sigma_dh_combined
         data['ap_err_lya_z'] = sigma_dh_lya
         data['at_err_lya_z'] = sigma_da_lya
         data['ap_err_tracer_z'] = sigma_dh_tracer
@@ -462,125 +250,4 @@ class Forecast:
             data['ap_err_cross_m'] = sigma_dh_combined_cross_m
             data['at_err_cross_m'] = sigma_da_combined_cross_m
 
-        # if forecast is not None:
-        #     #load data to plots instance
-        #     self.plots = Plots(forecast,data=data)
-
-        #     if self.config['control'].getboolean('plot bao'):
-        #         if self.covariance.per_mag:
-        #             self.plots.plot_da_h_m()
-        #             self.plots.fig.savefig(self.out_folder.joinpath('dap_dat_dm.png'))
-        #         else:
-        #             self.plots.plot_da_h_z()
-        #             self.plots.fig.savefig(self.out_folder.joinpath('dap_dat_z.png'))
-
         return data
-        
-    def get_dp_dlogk(self,model,mu):
-        """Return the differential of the a peak power spectrum component, 
-            with respect to log k, add peak broadening."""
-          
-        pk = self.get_p_pk(model)
-        
-        pk = self.apply_peak_smoothing(pk,mu)
-
-        # derivative of model wrt to log(k)
-        dmodel = np.zeros(self.power_spec.k.size)
-        dmodel[1:] = pk[1:]-pk[:-1]
-        dmodel_dlk  = dmodel/self.power_spec.dlogk
-                    
-        return dmodel_dlk
-    
-    def get_p_pk(self,model):
-        #get peak only component
-        # smooth = get_pk_smooth(self.cosmo.results,self.power_spec.k,model)
-        # pk = model - smooth
-        x = self.power_spec.logk
-        y = np.log(model)
-        x -= np.mean(x)
-        x /= (np.max(x)-np.min(x))
-        w=np.ones(x.size)
-        w[:3] *= 1.e8 
-        coef=np.polyfit(x,y,8,w=w)
-        pol=np.poly1d(coef)
-        smooth = np.exp(pol(x))
-        pk = model-smooth    
-
-        return pk
-
-    def apply_peak_smoothing(self,pk,mu):
-        
-        kp = mu * self.power_spec.k
-        kt = np.sqrt(1-mu**2) * self.power_spec.k
-        
-        # Eisenstein, Seo, White, 2007, Eq. 12
-        sig_nl_perp = 3.26 # Mpc/h
-        f = self.cosmo.growth_rate # lograthmic growth (at z_ref)
-        sig_nl_par = (1 + f) * sig_nl_perp # Mpc/h
-        
-        pk *= np.exp(-0.5 * ((sig_nl_par * kp)**2 + (sig_nl_perp * kt)**2))
-
-        return pk
-
-    def get_fisher(self,mu,dp_dlogk,var):
-        """Compute fisher matrix for ap, at"""
-        h = [mu**2,1 - mu**2]
-        if self.covariance.per_mag:
-            return np.outer(h,h)[:,:,None] * np.sum(dp_dlogk**2 / var.T, axis=1).T
-        else:
-            return np.outer(h,h) * np.sum(dp_dlogk**2 / var)
-        
-    def print_bao(self,fisher_matrix,which):
-        """Print BAO results from Fisher matrix"""
-        if self.covariance.per_mag:
-            cov = np.linalg.inv(fisher_matrix.T)
-            cov_diag = np.diagonal(cov.T,axis1=0,axis2=1)
-            sigma_dh = np.sqrt(cov_diag.T[0])
-            sigma_da = np.sqrt(cov_diag.T[1])
-            corr_coef = cov.T[0,1]/np.sqrt(cov_diag.T[0]*cov_diag.T[1])
-
-            print(f"ap ({which})={sigma_dh[-1]}, at ({which})={sigma_da[-1]},corr={corr_coef[-1]}")
-        else:
-            cov = np.linalg.inv(fisher_matrix)
-            sigma_dh = np.sqrt(cov[0,0])
-            sigma_da = np.sqrt(cov[1,1])    
-            corr_coef = cov[0,1]/np.sqrt(cov[0,0]*cov[1,1])
-
-            print(f"ap ({which})={sigma_dh}, at ({which})={sigma_da},corr={corr_coef}")
-            
-        return sigma_dh, sigma_da, corr_coef
-
-
-    def combine_BAO(self,dx1, dx2, rho):
-        """
-        Combine two BAO measurements (centred at 1) from different tracers, with correlation coefficient rho. This is a high noise approximation, 
-        to be replaced by a full Fisher covariance matrix.
-        
-        Returns:
-            dx_combined: uncertainty of the combined result
-        """
-        # Covariance matrix
-        # C = np.array([
-        #     [dx1**2, rho * dx1 * dx2],
-        #     [rho * dx1 * dx2, dx2**2]
-        # ])
-
-        # # Inverse covariance matrix
-        # C_inv = np.linalg.inv(C)
-
-        # # Weight vector
-        # ones = np.ones(2)
-
-        # # Combined value and uncertainty
-        # dx_combined = (1 / (ones @ C_inv @ ones))
-
-        dx_comb = 1 / (1 / dx1 + 1 / dx2)
-
-        return dx_comb
-
-
-
-                
-            
-
-

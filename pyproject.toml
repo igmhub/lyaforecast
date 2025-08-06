@@ -7,9 +7,9 @@ name = "lyaforecast"
 version = "0.1.0"
 description = "A package to forecast cosmological constraints from Lyman-alpha surveys."
 authors = [
+    { name = "Calum Gordon", email = "cgordon@ifae.es"},
     { name = "Andreu Font-Ribera", email = "afont@ifae.es"},
-    { name = "Julien Guy", email = "jguy@lbl.gov"},
-    { name = "Calum Gordon", email = "cgordon@ifae.es"}
+    { name = "Julien Guy", email = "jguy@lbl.gov"}
 ]
 
 [project.urls]

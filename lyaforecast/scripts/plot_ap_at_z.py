@@ -48,13 +48,6 @@ def plot_da_h_z(forecast_data):
             at_comb = data['at_err_comb_z'] * 100
             zs = data['redshifts']
 
-            # if i==1:
-            #     # ax[0,0].plot(zs,ap_lya,alpha=0.5,color=colours[i],label=labels[i])
-            #     # ax[0,0].plot(zs,at_lya,linestyle='dashed',alpha=0.5,color=colours[i])
-            #     ax[1,0].plot(zs,ap_cross,alpha=0.5,color='red',label=r'Ly$\alpha$(QSO)xLBG')
-            #     ax[1,0].plot(zs,at_cross,linestyle='dashed',alpha=0.5,color='red')
-            #     continue
-
             ax[0,0].plot(zs,ap_lya,alpha=alphas[0,i],color=colours[i],label=labels_detailed[0,i])#label=r'$\alpha_\parallel$')
             ax[0,0].plot(zs,at_lya,linestyle='dashed',alpha=alphas[0,i],color=colours[i])#label=r'$\alpha_\perp$')
 
@@ -64,31 +57,66 @@ def plot_da_h_z(forecast_data):
             ax[1,0].plot(zs,ap_cross,alpha=alphas[2,i],color=colours[i],label=labels_detailed[2,i])
             ax[1,0].plot(zs,at_cross,linestyle='dashed',alpha=alphas[2,i],color=colours[i])
 
-            #combined lya auto and lya-qso cross.
-
             ax[1,1].plot(zs,ap_comb,alpha=alphas[3,i],color=colours[i],label=labels_detailed[3,i])
             ax[1,1].plot(zs,at_comb,linestyle='dashed',alpha=alphas[3,i],color=colours[i])
 
 
+        
+   
             ax[1,0].set_xlabel(fr'$z$')
             ax[1,1].set_xlabel(fr'$z$')
             ax[0,0].set_ylabel(fr'% error ($dz=0.1$)')
             ax[1,0].set_ylabel(fr'% error ($dz=0.1$)')
 
-        ax[0,0].legend()
+        #cosmic variance limits
+        cosmic_variance_desi_ii_lya_at = [0.77351024, 0.77110882, 0.76960042, 0.76885945, 0.76878171,
+                                                0.76928012, 0.77028135, 0.77172334, 0.77355316, 0.77572549,
+                                                0.77820132, 0.78094688, 0.78393284, 0.78713362, 0.79052678]
+        cosmic_variance_desi_ii_lya_ap = [1.75440014, 1.74898995, 1.74560357, 1.7439563 , 1.74381197,
+                                            1.74497314, 1.74727364, 1.75057275, 1.75475054, 1.75970431,
+                                            1.7653456 , 1.77159792, 1.77839478, 1.78567819, 1.79339734]
+        cosmic_variance_desi_lya_ap = [1.04187624, 1.0386703 , 1.03666593, 1.03569407, 1.03561449,
+                                            1.03630996, 1.03768182, 1.03964652, 1.04213286, 1.04507985,
+                                            1.04843498, 1.05215283, 1.05619393, 1.06052385, 1.06511242]
+        cosmic_variance_desi_lya_at = [0.45773395, 0.45631349, 0.45542146, 0.45498354, 0.45493808,
+                                            0.45523354, 0.45582653, 0.45668032, 0.45776361, 0.45904956,
+                                            0.4605151 , 0.46214024, 0.46390763, 0.46580213, 0.46781047]
+
+        ax[0,0].plot(zs,cosmic_variance_desi_ii_lya_ap,alpha=0.5,label=r'$\sigma^2_{\mathrm{cosmic},\mathrm{DESI}-\mathrm{II}}$',
+                        color='black')#,label=r'$\sigma_\mathrm{cosmic,LBG}$')
+        ax[0,0].plot(zs,cosmic_variance_desi_ii_lya_at,#label=r'$\sigma_\mathrm{cosmic,LBG}$',
+                        linestyle='dashed',alpha=0.5,color='black')
+        ax[0,0].plot(zs,cosmic_variance_desi_lya_ap,alpha=0.5,
+                        color='darkblue',label=r'$\sigma^2_\mathrm{cosmic,DESI}$')
+        ax[0,0].plot(zs,cosmic_variance_desi_lya_at,#label=r'$\sigma_\mathrm{cosmic,QSO}$',
+                        linestyle='dashed',alpha=0.5,color='darkblue')
+
+        ax[0,0].legend(loc='upper left')
         ax[0,1].legend()
         ax[1,0].legend(fontsize=22)
         ax[1,1].legend()
 
-        ax[0,0].grid()
-        ax[0,1].grid()
-        ax[1,0].grid()
-        ax[1,1].grid()
+        ax[0,0].grid(which='both')
+        ax[0,1].grid(which='both')
+        ax[1,0].grid(which='both')
+        ax[1,1].grid(which='both')
 
-        ax[0,0].set_ylim(1.5,20)
-        ax[0,1].set_ylim(1.5,20)
-        ax[1,0].set_ylim(1.5,20)
-        ax[1,1].set_ylim(1.5,20)
+        #ax[0,0].text(2.09,1.95,r'$\sigma^2_\mathrm{cosmic,LBG}$',fontsize=18)
+       # ax[0,0].text(2.09,cosmic_variance_desi_ii_lya_LBG_at[0])
+        #ax[0,0].text(2.09,1.20,r'$\sigma^2_\mathrm{cosmic,QSO}$',fontsize=18)
+       # ax[0,0].text(2.09,0.5,r'$\sigma_\mathrm{cosmic,QSO}$')
+        
+        ax[0,0].set_ylim(0,20)
+        ax[0,1].set_ylim(0,20)
+        ax[1,0].set_ylim(0,20)
+        ax[1,1].set_ylim(0,20)
+
+
+        ax[0,0].set_yscale('linear')
+        ax[0,1].set_yscale('linear')
+        ax[1,0].set_yscale('linear')
+        ax[1,1].set_yscale('linear')
+
 
         ax[0,0].set_title(r'Ly$\alpha$ power')
         ax[0,1].set_title(r'Tracer power')

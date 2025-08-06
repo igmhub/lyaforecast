@@ -435,28 +435,31 @@ class Plots:
                     ax.set_ylim(1e-1)
                     ax.set_xlim(3500,6000)
             else:
-                mags = [19,20,21,22]
+                mags = [19,20,21,22,23]
                 #zqs = [2,2.25,2.5,2.75,3,3.25,3.5,3.75,4,4.25,4.5,4.75]
-                zqs = np.linspace(2,3.5,10)
-                dz = zqs[1]-zqs[0]
-                lmax = 5500
+                zq = 2.5#np.linspace(2,3.5,10)
+                #dz = zqs[1]-zqs[0]
+                lmax = 4250
                 lmin = 3600
                 nb = 100
-                snr = np.zeros(nb)
+                # snr = np.zeros(nb)
                 snr_z = np.zeros(nb)
                 lam = np.linspace(lmin,lmax,nb)
+                
                 for k,mag in enumerate(mags):
-                    snr = 0
-                    for zq in zqs:
-                        for i,l in enumerate(lam):
-                            snr_z[i] = self._forecast.spectrograph.get_snr_per_ang(mag,zq,l)
-                        snr += snr_z/len(zqs)
+                    for i,l in enumerate(lam):
+                        snr_z[i] = self._forecast.spectrograph.get_snr_per_ang(mag,zq,l)
+                #     snr = 0
+                #     for zq in zqs:
+                #         for i,l in enumerate(lam):
+                #             snr_z[i] = self._forecast.spectrograph.get_snr_per_ang(mag,zq,l)
+                #         snr += snr_z/len(zqs)
                         #snr += snr_z * dz
 
-                    ax.plot(lam,gaussian_filter1d(snr,5),label=f'r={mag}',color=plt.cm.Set1(k))
+                    ax.plot(lam,gaussian_filter1d(snr_z,0.1),label=f'r={mag}',color=plt.cm.Set1(k))
 
             ax.legend(loc='lower left',fontsize=15)
-            ax.set_ylabel(r'SNR per $\AA$',fontsize=15)
+            ax.set_ylabel(r'SNR/$\AA$$(m,z=2.5)$',fontsize=15)
             ax.set_xlabel(r'$\lambda[\AA]$',fontsize=15)
             ax.set_yscale('log')
             ax.grid(which='both')
