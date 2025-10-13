@@ -10,5 +10,6 @@ from .covariance import Covariance
 from .spectrograph import Spectrograph
 from .survey import Survey
 from .power_spectrum import PowerSpectrum
+from .fisher import Fisher
 from .utils import get_file, setup_logger
 from .forecast import Forecast

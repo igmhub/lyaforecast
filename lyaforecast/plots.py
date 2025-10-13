@@ -260,6 +260,7 @@ class Plots:
             qlf = self._survey.get_dn_dzdm
             # plot QL at different z
             linestyles = ['solid','dashed']
+            # savekeys = ['qso','lbg']
             for i,t in enumerate(['lya','tracer']):
                 ax.plot(m,gaussian_filter1d(qlf(2.0,m,t),0.7),label='z=2.0',
                            linestyle=linestyles[i],color='blue',alpha=0.5)
@@ -269,11 +270,17 @@ class Plots:
                            linestyle=linestyles[i],color='red',alpha=0.5)
                 ax.plot(m,gaussian_filter1d(qlf(3.5,m,t),0.7),label='z=3.5',
                            linestyle=linestyles[i],color='purple',alpha=0.5)
+                # np.savez(f'/Users/calum/Documents/Work/dn_dm_{savekeys[i]}.npz',
+                #          mags=m,z2=gaussian_filter1d(qlf(2.0,m,t),0.7),
+                #          z2_5=gaussian_filter1d(qlf(2.5,m,t),0.7),
+                #          z3=gaussian_filter1d(qlf(3.0,m,t),0.7),
+                #          z3_5=gaussian_filter1d(qlf(3.5,m,t),0.7))
+
                 if i == 0:
                     ax.legend(loc=2,fontsize=20)
             ax.set_yscale('log')
             ax.set_xlim(18,27)
-            ax.set_ylim(1e-3,)
+            ax.set_ylim(1e0,)
             ax.set_xlabel('$r$ mag',fontsize=20)
             ax.set_ylabel(r'$\frac{dN}{dmddeg^2}(z)$',fontsize=20)
             ax.grid()

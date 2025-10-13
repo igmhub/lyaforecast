@@ -14,7 +14,6 @@ class Results:
         per_z_results = dict(lya_auto = [], cross = [], tracer_auto = [])
 
         #write or log or both
-
         pass
 
 

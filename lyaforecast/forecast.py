@@ -12,7 +12,7 @@ import numpy as np
 
 from lyaforecast import (
     CosmoCamb, Covariance, Spectrograph,
-    Survey, PowerSpectrum, get_file, 
+    Survey, PowerSpectrum, Fisher, get_file, 
     setup_logger
 )
 
@@ -53,74 +53,96 @@ class Forecast:
         self._tracer_auto_flag = self.config['control'].getboolean('tracer auto')
 
         #initialise cosmology
-        self.cosmo = CosmoCamb(self.config['cosmo'].get('filename'),
+        self._cosmo = CosmoCamb(self.config['cosmo'].get('filename'),
                                 self.config['cosmo'].getfloat('z_ref', None))
 
         #load survey instance
-        self.survey = Survey(self.config)
+        self._survey = Survey(self.config)
 
         #load spectrograph instance
-        self.spectrograph = Spectrograph(self.config, self.survey)
+        self._spectrograph = Spectrograph(self.config, self._survey)
 
         #load power spectrum instance
-        self.power_spec = PowerSpectrum(self.config, self.cosmo, self.spectrograph)
+        self._power_spec = PowerSpectrum(self.config, self._cosmo, self._spectrograph)
 
         #initialise covariance class (McDonald & Eisenstein (2007)),
         #  that stores info and methods to compute p3d and its variance
-        self.covariance = Covariance(self.config, self.cosmo, self.survey, 
-                                     self.spectrograph, self.power_spec)
+        self._covariance = Covariance(self.config, self._cosmo, self._survey, 
+                                     self._spectrograph, self._power_spec)
         
         #init_end_time = time.time()
         #print(f"Forecast initialized in {init_end_time - init_start_time:.4f} seconds.")
+    
+    @property
+    def cosmo(self):
+        """Cosmological model instance."""
+        return self._cosmo
+
+    @property
+    def survey(self):
+        """Survey description instance."""
+        return self._survey
+
+    @property
+    def spectrograph(self):
+        """Spectrograph model instance."""
+        return self._spectrograph
+
+    @property
+    def power_spectrum(self):
+        """Power spectrum model instance."""
+        return self._power_spec
 
     def run_forecast(self):
         #setup logger
         logger = setup_logger(self.out_folder)
         logger.info('Running BAO forecast')
 
-        if self.covariance.per_mag:
-            sigma_dh_lya = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-            sigma_da_lya = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-            sigma_dh_tracer = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-            sigma_da_tracer = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-            sigma_dh_cross = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-            sigma_da_cross = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-            sigma_dh_lya_lya_lya_tracer = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-            sigma_da_lya_lya_lya_tracer = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-            corr_coef = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
+        if self._covariance.per_mag:
+            sigma_dh_lya = np.zeros((self._survey.num_z_bins, self._survey.num_mag_bins))
+            sigma_da_lya = np.zeros((self._survey.num_z_bins, self._survey.num_mag_bins))
+            sigma_dh_tracer = np.zeros((self._survey.num_z_bins, self._survey.num_mag_bins))
+            sigma_da_tracer = np.zeros((self._survey.num_z_bins, self._survey.num_mag_bins))
+            sigma_dh_cross = np.zeros((self._survey.num_z_bins, self._survey.num_mag_bins))
+            sigma_da_cross = np.zeros((self._survey.num_z_bins, self._survey.num_mag_bins))
+            sigma_dh_lya_lya_lya_tracer = np.zeros((self._survey.num_z_bins, self._survey.num_mag_bins))
+            sigma_da_lya_lya_lya_tracer = np.zeros((self._survey.num_z_bins, self._survey.num_mag_bins))
+            corr_coef = np.zeros((self._survey.num_z_bins, self._survey.num_mag_bins))
         else:
-            sigma_da_lya = np.zeros(self.survey.num_z_bins)
-            sigma_dh_lya = np.zeros(self.survey.num_z_bins)
-            sigma_da_tracer = np.zeros(self.survey.num_z_bins)
-            sigma_dh_tracer = np.zeros(self.survey.num_z_bins)
-            sigma_da_cross = np.zeros(self.survey.num_z_bins)
-            sigma_dh_cross = np.zeros(self.survey.num_z_bins)
-            sigma_da_lya_lya_lya_tracer = np.zeros(self.survey.num_z_bins)
-            sigma_dh_lya_lya_lya_tracer = np.zeros(self.survey.num_z_bins)
-            corr_coef = np.zeros(self.survey.num_z_bins)
+            sigma_da_lya = np.zeros(self._survey.num_z_bins)
+            sigma_dh_lya = np.zeros(self._survey.num_z_bins)
+            sigma_da_tracer = np.zeros(self._survey.num_z_bins)
+            sigma_dh_tracer = np.zeros(self._survey.num_z_bins)
+            sigma_da_cross = np.zeros(self._survey.num_z_bins)
+            sigma_dh_cross = np.zeros(self._survey.num_z_bins)
+            sigma_da_lya_lya_lya_tracer = np.zeros(self._survey.num_z_bins)
+            sigma_dh_lya_lya_lya_tracer = np.zeros(self._survey.num_z_bins)
+            corr_coef = np.zeros(self._survey.num_z_bins)
 
-        for iz, zc in enumerate(self.survey.z_bin_centres):
-            logger.info(f"z bin = [{self.survey.z_bin_edges[iz,0]}-"
-                        f"{self.survey.z_bin_edges[iz,1]}], bin centre = {zc}")
+        for iz, zc in enumerate(self._survey.z_bin_centres):
+            logger.info(f"z bin = [{self._survey.z_bin_edges[iz,0]}-"
+                        f"{self._survey.z_bin_edges[iz,1]}], bin centre = {zc}")
 
             # observed wavelength range from redshift limits
-            lmin = self.cosmo.LYA_REST * (1 + self.survey.z_bin_edges[iz,0])
-            lmax = self.cosmo.LYA_REST * (1 + self.survey.z_bin_edges[iz,1])
+            lmin = self._cosmo.LYA_REST * (1 + self._survey.z_bin_edges[iz,0])
+            lmax = self._cosmo.LYA_REST * (1 + self._survey.z_bin_edges[iz,1])
 
             #call function, setting bin width
-            self.covariance(lmin,lmax)
-
-            # some survey settings
-            pix_width = self.covariance._pix_kms
-            resolution = self.covariance._res_kms
+            self._covariance(lmin,lmax)
 
             # this uses Luminosity, density, noise model
-            self.covariance.compute_eff_density_and_noise()
+            self._covariance.compute_eff_density_and_noise()
+
+            # number of modes as a function of k, in z bin
+            num_modes_k = self._covariance.num_modes
+
+            #initialise Fisher matrix computation class
+            fisher = Fisher(self._power_spec,self._cosmo,num_modes_k)
+
                     
-            #empty array for fisher information
             #if per magnitude add extra dimension
-            if self.covariance.per_mag:
-                fisher_matrix_lya = np.zeros((2,2,self.survey.num_mag_bins))
+            if self._covariance.per_mag:
+                fisher_matrix_lya = np.zeros((2,2,self._survey.num_mag_bins))
                 fisher_matrix_tracer = np.zeros_like(fisher_matrix_lya)
                 fisher_matrix_cross = np.zeros_like(fisher_matrix_lya)
             else:
@@ -128,48 +150,47 @@ class Forecast:
                 fisher_matrix_tracer = np.zeros_like(fisher_matrix_lya)
                 fisher_matrix_cross = np.zeros_like(fisher_matrix_lya)      
 
-            
-            for i, mu in enumerate(self.power_spec.mu):
-                p3d_lya = np.array([self.power_spec.compute_p3d_hmpc_smooth(zc, k,
-                                                 mu, pix_width, resolution, 'lya') 
-                                        for k in self.power_spec.k]) # (Mpc/h)**3
-                p3d_tracer = np.array([self.power_spec.compute_p3d_hmpc_smooth(zc, k,
-                                            mu, pix_width, resolution, self._tracer) 
-                                        for k in self.power_spec.k]) # (Mpc/h)**3
-                p3d_cross = np.array([self.power_spec.compute_p3d_hmpc_smooth(zc, k,
-                                            mu, pix_width, resolution, self._cross_tracer) 
-                                            for k in self.power_spec.k]) # (Mpc/h)**3
 
-                #var^2/P^2
-                p3d_lya_var = np.array([self.covariance.compute_3d_power_variance(k,mu) 
-                                    for k in self.power_spec.k]) # (Mpc/h)**6
-                p3d_tracer_var = np.array([self.covariance.compute_tracer_power_variance(k,mu) 
-                                    for k in self.power_spec.k]) # (Mpc/h)**6
-                p3d_cross_var = np.array([self.covariance.compute_cross_power_variance(k,mu) 
-                                    for k in self.power_spec.k]) # (Mpc/h)**6
+            # Loop over tracers
+            p3d_cache = {}
+            for tracer in ['lya', self._tracer, self._cross_tracer]:
+                # Compute P(k, mu) for all mu at once
+                # Resulting shape will be (len(mu), len(k))
+                p3d_cache[tracer] = abs(np.array([
+                    self._power_spec.compute_p3d_hmpc_smooth(
+                        zc, self._power_spec.k, mu, 
+                        self._covariance.pix_width_kms,
+                        self._covariance.pix_res_kms,
+                        tracer
+                    )
+                    for mu in self._power_spec.mu
+                ]))
+
+            #compute measured power spectra (e.g. including noise)
+            p3d_obs_cache = {}
+            for tracer in ['lya', self._tracer, self._cross_tracer]:
+                p3d_obs_cache[tracer] = np.array([
+                    self._covariance.compute_total_power(self._power_spec.k,
+                        mu,
+                        tracer)
+                    for mu in self._power_spec.mu])
+
+            fisher.compute_fisher(p3d_cache,p3d_obs_cache,self._lya_tracer)
 
 
-                #get derivatives of p3d
-                dp3d_lya_dlogk = self.get_dp_dlogk(p3d_lya,mu)
-                dp3d_tracer_dlogk = self.get_dp_dlogk(p3d_tracer,mu)
-                dp3d_cross_dlogk = self.get_dp_dlogk(-p3d_cross,mu)
+            fisher.compute_derivatives(mu,p3d_lya,f'lya({self._lya_tracer})')
+            fisher.compute_derivatives(mu,p3d_lya,self._tracer)
+            fisher.compute_derivatives(mu,p3d_lya,f'{self._tracer}_lya({self._lya_tracer})')
+
+            #get derivatives of p3d
+            fisher_matrix_lya += fisher.compute_fisher(mu,p3d_lya,p3d_lya_var)
+            fisher_matrix_tracer += fisher.compute_fisher(mu,p3d_tracer,p3d_tracer_var)
+            fisher_matrix_cross += fisher.compute_fisher(mu,abs(p3d_cross),p3d_cross_var)
                 
-                # k = sqrt( kp**2 + kt**2)
-                # k'  = sqrt( ap**2*k**2*mu2 + at**2*k**2*(1-mu2))
-                # k' = k*sqrt( ap**2*mu2 + at**2*(1-mu2))
-                # dk/dap         = mu2 * k
-                # dlog(k)/dap    = mu2
-                # dlog(k)/dat    = (1-mu2)
-                # dmodel/dap     = dmodel/dlog(k)*dlog(k)/dap    = dmodeldlk * mu2
-                # dmodel/dat     = dmodel/dlog(k)*dlog(k)/dat    = dmodeldlk * (1-mu2)
-                fisher_matrix_lya += self.get_fisher(mu,dp3d_lya_dlogk,p3d_lya_var)
-                fisher_matrix_tracer += self.get_fisher(mu,dp3d_tracer_dlogk,p3d_tracer_var)
-                fisher_matrix_cross += self.get_fisher(mu,dp3d_cross_dlogk,p3d_cross_var)
-            
 
-            sigma_dh_lya_z, sigma_da_lya_z, corr_coef_lya_z = self.print_bao(fisher_matrix_lya,'lya')
-            sigma_dh_tracer_z, sigma_da_tracer_z, corr_coef_tracer_z = self.print_bao(fisher_matrix_tracer,self._tracer)
-            sigma_dh_cross_z, sigma_da_cross_z, corr_coef_cross_z = self.print_bao(fisher_matrix_cross,'cross')
+            sigma_dh_lya_z, sigma_da_lya_z, corr_coef_lya_z = fisher.print_bao(fisher_matrix_lya,f'lya')
+            sigma_dh_tracer_z, sigma_da_tracer_z, corr_coef_tracer_z = fisher.print_bao(fisher_matrix_tracer,self._tracer)
+            sigma_dh_cross_z, sigma_da_cross_z, corr_coef_cross_z = fisher.print_bao(fisher_matrix_cross,'cross')
 
             sigma_dh_lya[iz] = sigma_dh_lya_z
             sigma_da_lya[iz] = sigma_da_lya_z
@@ -180,24 +201,15 @@ class Forecast:
 
             sigma_dh_cross[iz] = sigma_dh_cross_z
             sigma_da_cross[iz] = sigma_da_cross_z
-
-            bao_corr_coef = 0
-            
-            sigma_da_lya_lya_lya_tracer[iz] = self.combine_BAO(sigma_da_lya_z,sigma_da_cross_z,bao_corr_coef)
-            sigma_dh_lya_lya_lya_tracer[iz] = self.combine_BAO(sigma_dh_lya_z,sigma_dh_cross_z,bao_corr_coef)
-
-            print(f'at (lyaxlya + lyax{self._tracer}): {sigma_da_lya_lya_lya_tracer[iz]}, ap (lyaxlya + lyax{self._tracer}): {sigma_dh_lya_lya_lya_tracer[iz]}')
+ 
         
-        
-        if self.covariance.per_mag:
+        if self._covariance.per_mag:
             sigma_da_combined_lya_m = 1./np.sqrt(np.sum(1./sigma_da_lya**2,axis=0))
             sigma_dh_combined_lya_m = 1./np.sqrt(np.sum(1./sigma_dh_lya**2,axis=0))
             sigma_da_combined_qso_m = 1./np.sqrt(np.sum(1./sigma_da_tracer**2,axis=0))
             sigma_dh_combined_qso_m = 1./np.sqrt(np.sum(1./sigma_dh_tracer**2,axis=0))
             sigma_da_combined_cross_m = 1./np.sqrt(np.sum(1./sigma_da_cross**2,axis=0))
             sigma_dh_combined_cross_m = 1./np.sqrt(np.sum(1./sigma_dh_cross**2,axis=0))
-            sigma_da_combined_comb_m = 1./np.sqrt(np.sum(1./sigma_da_lya_lya_lya_tracer**2,axis=0))
-            sigma_dh_combined_comb_m = 1./np.sqrt(np.sum(1./sigma_dh_lya_lya_lya_tracer**2,axis=0))
 
             sigma_da_combined = sigma_da_combined_lya_m[-1]
             sigma_dh_combined = sigma_dh_combined_lya_m[-1]
@@ -205,8 +217,6 @@ class Forecast:
             sigma_dh_combined_tracer = sigma_dh_combined_qso_m[-1]
             sigma_da_combined_cross = sigma_da_combined_cross_m[-1]
             sigma_dh_combined_cross = sigma_dh_combined_cross_m[-1]
-            sigma_da_combined_comb = sigma_da_combined_comb_m[-1]
-            sigma_dh_combined_comb = sigma_dh_combined_comb_m[-1]
 
         else:
             sigma_da_combined = 1./np.sqrt(np.sum(1./sigma_da_lya**2))
@@ -215,8 +225,6 @@ class Forecast:
             sigma_dh_combined_tracer = 1./np.sqrt(np.sum(1./sigma_dh_tracer**2))
             sigma_da_combined_cross = 1./np.sqrt(np.sum(1./sigma_da_cross**2))
             sigma_dh_combined_cross = 1./np.sqrt(np.sum(1./sigma_dh_cross**2))
-            sigma_da_combined_comb = 1./np.sqrt(np.sum(1./sigma_da_lya_lya_lya_tracer**2))
-            sigma_dh_combined_comb = 1./np.sqrt(np.sum(1./sigma_dh_lya_lya_lya_tracer**2))
 
 
 
@@ -226,13 +234,14 @@ class Forecast:
                     fr', ap ({self._tracer})={sigma_dh_combined_tracer}')
         print(f'\n Combined: at (lyaxtr)={sigma_da_combined_cross}'
                     fr', ap (lyaxtr)={sigma_dh_combined_cross}')
-        print(f'\n Combined: at (lyaxlya + lyaxtr)={sigma_da_combined_comb}'
-                    fr', ap (lyaxlya + lyaxtr)={sigma_dh_combined_comb}')
+        
+        print(fr'\n Combined: at (lyaxlya + lyaxtr)={self.combine_BAO(sigma_da_combined,sigma_da_combined_cross)}'
+                fr', ap (lyaxlya + lyaxtr)={self.combine_BAO(sigma_dh_combined,sigma_dh_combined_cross)}')
        
         data = {}
-        data["redshifts"] = self.survey.z_bin_centres
-        data["mean redshift"] = self.cosmo.z_ref
-        data["magnitudes"] = {self.survey.band:self.survey.maglist}
+        data["redshifts"] = self._survey.z_bin_centres
+        data["mean redshift"] = self._cosmo.z_ref
+        data["magnitudes"] = {self._survey.band:self._survey.maglist}
         data['ap_err_lya_z'] = sigma_dh_lya
         data['at_err_lya_z'] = sigma_da_lya
         data['ap_err_tracer_z'] = sigma_dh_tracer
@@ -242,7 +251,7 @@ class Forecast:
         data['ap_err_comb_z'] = sigma_dh_lya_lya_lya_tracer
         data['at_err_comb_z'] = sigma_da_lya_lya_lya_tracer
         
-        if self.covariance.per_mag:
+        if self._covariance.per_mag:
             data['ap_err_lya_m'] = sigma_dh_combined_lya_m
             data['at_err_lya_m'] = sigma_da_combined_lya_m
             data['ap_err_qso_m'] = sigma_dh_combined_qso_m
@@ -251,3 +260,9 @@ class Forecast:
             data['at_err_cross_m'] = sigma_da_combined_cross_m
 
         return data
+    
+    def combine_BAO(self,dx1, dx2):
+
+        dx_comb = 1 / (1 / dx1 + 1 / dx2)
+
+        return dx_comb

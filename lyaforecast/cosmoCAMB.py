@@ -33,6 +33,7 @@ class CosmoCamb:
         self.results = camb.get_results(self._pars)
 
         self.growth_rate = self.results.get_fsigma8()[0] / self.results.get_sigma8()[0]
+
         
     def get_pk_lin(self,k,kmin=1.e-4,kmax=1.e1,npoints=1000):
         """Return linear power interpolator in units of h/Mpc, at zref"""
@@ -57,4 +58,3 @@ class CosmoCamb:
         dmpc_drad = self.results.angular_diameter_distance(z) * (1+z)
         #print('dMpc_drad',dMpc_drad)
         return dmpc_drad * (np.pi/180.0) * (self._pars.H0 / 100.0)
-

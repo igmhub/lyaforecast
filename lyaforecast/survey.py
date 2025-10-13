@@ -65,21 +65,41 @@ class Survey:
         if self.tracer is not None:
            self._tracer_dndz = self._setup_dndzdm_tracer(self._tracer_dzdz_file)
 
-    def _get_z_bins(self,config):
-        survey_cfg = config['survey']
-        z_centres_flag = survey_cfg.get('z bin centres')
+    # def _get_z_bins(self,config):
+    #     survey_cfg = config['survey']
+    #     z_centres_flag = survey_cfg.get('z bin centres')
 
+    #     self.zmin = survey_cfg.getfloat('z bin min', 2)
+    #     self.zmax = survey_cfg.getfloat('z bin max', 4)
+    #     self.num_z_bins = survey_cfg.getint('num z bins', 1)
+
+    #     if z_centres_flag:
+    #         self.z_bin_centres = np.fromstring(z_centres_flag, sep=',')
+    #         dz = np.diff(self.z_bin_centres, prepend=self.z_bin_centres[0], append=self.z_bin_centres[-1]) / 2
+    #         self.z_bin_edges = np.array([self.z_bin_centres - dz[:-1], self.z_bin_centres + dz[1:]])
+    #     else:
+    #         self._z_list = np.linspace(self.zmin, self.zmax, self.num_z_bins+1)
+    #         self.z_bin_edges = np.array([[self._z_list[i], self._z_list[i + 1]] for i in range(self.num_z_bins)])
+    #         self.z_bin_centres = self.z_bin_edges.mean(axis=1)
+
+    def _get_z_bins(self,config):
+
+        survey_cfg = config['survey']
         self.zmin = survey_cfg.getfloat('z bin min', 2)
         self.zmax = survey_cfg.getfloat('z bin max', 4)
         self.num_z_bins = survey_cfg.getint('num z bins', 1)
-
-        if z_centres_flag:
-            self.z_bin_centres = np.fromstring(z_centres_flag, sep=',')
-            dz = np.diff(self.z_bin_centres, prepend=self.z_bin_centres[0], append=self.z_bin_centres[-1]) / 2
-            self.z_bin_edges = np.array([self.z_bin_centres - dz[:-1], self.z_bin_centres + dz[1:]])
+        z_bin_centres = survey_cfg.get('z bin centres', None)
+        
+        if z_bin_centres is not None:
+            self.z_bin_centres = np.array(z_bin_centres.split(",")).astype(float)
+            dz = np.zeros(self.z_bin_centres.size)
+            dz[1:-1] = (self.z_bin_centres[2:] - self.z_bin_centres[:-2]) / 2.
+            dz[0] = self.z_bin_centres[1] - self.z_bin_centres[0]
+            dz[-1] = self.z_bin_centres[-1] - self.z_bin_centres[-2]
+            self.z_bin_edges = np.array([self.z_bin_centres - dz / 2, self.z_bin_centres + dz / 2])
         else:
-            self._z_list = np.linspace(self.zmin, self.zmax, self.num_z_bins+1)
-            self.z_bin_edges = np.array([[self._z_list[i], self._z_list[i + 1]] for i in range(self.num_z_bins)])
+            z_list = np.linspace(self.zmin, self.zmax, self.num_z_bins + 1)
+            self.z_bin_edges = np.array([[z_list[i], z_list[i + 1]] for i in range(self.num_z_bins)]).T
             self.z_bin_centres = self.z_bin_edges.mean(axis=0)
 
     def _setup_dndzdm_lya(self,file):
