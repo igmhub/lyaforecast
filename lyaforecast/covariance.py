@@ -172,7 +172,7 @@ class Covariance:
         #prefactor of Fisher matrix
         self._num_modes = (self._survey_volume_mpc * self._power_spec.k**2 
                                 * self._power_spec.dk * self._power_spec.dmu 
-                                    / (4 * np.pi**2))
+                                    / (2 * np.pi**2))
 
     def compute_eff_density_and_noise(self):
         """ Compute effective density of lines of sight and eff. noise power.
@@ -258,16 +258,12 @@ class Covariance:
         return total_power_mpc
     
     def _compute_total_power_cross(self,kt_deg,kp_kms,k_hmpc,mu,tracer):
+        """Compute observed power from cross-correlation of forests and galaxies/quasars.
+            Should be no noise contributions in theory."""
 
         p3d = self._power_spec.compute_p3d_hmpc(self._z_mean,k_hmpc,mu,which=tracer)
 
-        total_power_tracer = self._compute_total_power_tracer(k_hmpc,mu)
-
-        total_power_lya = self._compute_total_power_lya(kt_deg,kp_kms)
-
-        total_power_cross = p3d**2 + total_power_lya * total_power_tracer
-
-        return total_power_cross
+        return p3d
 
 
 
