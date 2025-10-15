@@ -192,7 +192,7 @@ class Spectrograph:
         if rmag > self._magnitudes[-1]: 
             #print('WARNING: extrapolating beyond stored magnitude information')
             if self._survey.lya_tracer!='lbg':
-                print(f'mag {rmag} too faint, returning large noise')
+                #print(f'mag {rmag} too faint, returning large noise')
                 return large_noise        
         if zq > self._zq[-1] or zq < self._zq[0]: 
             print(f'zqso {zq} out of range, returning large noise')

@@ -263,7 +263,7 @@ class Covariance:
 
         p3d = self._power_spec.compute_p3d_hmpc(self._z_mean,k_hmpc,mu,which=tracer)
 
-        return p3d
+        return (p3d)
 
 
 

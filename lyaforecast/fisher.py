@@ -1,12 +1,4 @@
 """Class to store and perform operations with Fisher matrices."""
-#If we want to combine tracers, we need to compute our fisher matrices with full covariance matrices. Hence, I will start to move everything related to that to this module.
-# We want to combine: 
-# - lya auto, tracer auto, and cross within one config. 
-# - these from a different config (set of tracers).
-
-#The way this is all coded would make multi-config combinations quite tricky.
-#how do we remove redundant data? Need to include the compute-lya-auto, compute-cross, compute-tracer-auto options in configs.
-#raise an error if two rows are dependent (matrix is non-invertible) because measurements have been repeated.
 
 import numpy as np 
 
@@ -23,7 +15,7 @@ class Fisher:
 
         self._derivatives = {}
 
-    def compute_fisher(self,models,measurements,lya_tracer):
+    def compute_fisher(self,models,measurements,spectra_list):
         """Compute fisher matrix for BAO componenets alpha_parallel and alpha_transverse"""
         fisher = np.zeros((2,2))
         #for a given mu work out fisher
@@ -37,13 +29,15 @@ class Fisher:
             #measured power spectra
             # build dictionary
             p_measured_dict = {label: measurements[label][i, :] for label in measurements.keys()}
-            p_measured_matrix, label_to_idx = self.gaussian_covariance_array_func(p_measured_dict)
+
+            #To-do: differentiate between labels used to compute C, and measured spectra that are acutally passed.
+            #Because cross-correlation needs both measured auto correlations
+            p_measured_matrix, label_to_idx = self.gaussian_covariance_array_func(p_measured_dict,spectra_list)
             M = np.moveaxis(p_measured_matrix, -1, 0)
             M_inv = np.linalg.inv(M)
             p_measured_matrix_inv = np.moveaxis(M_inv, 0, -1)
 
             fisher_mu_k = np.einsum('ik,jik,jk->k', dmodel_dlk, p_measured_matrix_inv, dmodel_dlk)
-            fisher_mu_k /= self._num_modes
             fisher_mu = np.sum(fisher_mu_k)
             fisher += pre_factor_mu * fisher_mu
 
@@ -56,44 +50,44 @@ class Fisher:
         key = f'{x}_{y}' if f'{x}_{y}' in spectra_dict else f'{y}_{x}'
         return spectra_dict[key]   
 
-    def gaussian_covariance_array_func(self,spectra_dict):
+    def gaussian_covariance_array_func(self,measured_power_spectra,labels):
         """
         Compute Gaussian covariance as a NumPy array using labels,
         with helper function defined outside loops.
         
         Parameters
         ----------
-        spectra_dict : dict
-            Keys are strings like 'lya_lya', 'qso_qso', 'lya_qso'.
-            Values are arrays of shape (N_k,)
+        labels : dict
+            Strings like 'lya_lya', 'qso_qso', 'lya_qso'.
+        measured_power_spectra: dict
+            Keys are strings like above, Values are arrays of shape (N_k,)
         
         Returns
         -------
         C_array : array, shape (N_spectra, N_spectra, N_k)
         label_to_index : dict mapping label -> array index
         """
-        labels = list(spectra_dict.keys())
+        #labels = list(spectra_dict.keys())
         N_spectra = len(labels)
-        N_k = next(iter(spectra_dict.values())).shape[0]
+        N_k = self._power_spec.k.size #next(iter(spectra_dict.values())).shape[0]
         
         label_to_index = {label: i for i, label in enumerate(labels)}
         label_pairs = {label: tuple(label.split('_')) for label in labels}
         
         C_array = np.zeros((N_spectra, N_spectra, N_k))
-
         
         for x, A in enumerate(labels):
             iA, jA = label_pairs[A]
             for y, B in enumerate(labels):
                 iB, jB = label_pairs[B]
                 
-                P_im = self.p_entry_from_label(spectra_dict, iA, iB)
-                P_jn = self.p_entry_from_label(spectra_dict, jA, jB)
-                P_in = self.p_entry_from_label(spectra_dict, iA, jB)
-                P_ji = self.p_entry_from_label(spectra_dict, jA, iB)
+                P_im = self.p_entry_from_label(measured_power_spectra, iA, iB)
+                P_jn = self.p_entry_from_label(measured_power_spectra, jA, jB)
+                P_in = self.p_entry_from_label(measured_power_spectra, iA, jB)
+                P_ji = self.p_entry_from_label(measured_power_spectra, jA, iB)
                 
-                C_array[x, y, :] = (P_im * P_jn + P_in * P_ji)
-        
+                C_array[x, y, :] = (P_im * P_jn + P_in * P_ji) / self._num_modes
+                
         return C_array, label_to_index
 
     
@@ -121,7 +115,6 @@ class Fisher:
         dmodel_dlk[:, 1:] = (pk[:, 1:] - pk[:, :-1]) / self._power_spec.dlogk[1:]
 
         return dmodel_dlk
-        #self._derivatives[f'dP_dlogk_{corr_name}'] = dmodel_dlk
 
     def _get_p_pk(self, model):
         """Get peak-only component of linear matter power for multiple models (N, 500)."""
@@ -132,17 +125,16 @@ class Fisher:
         w[:3] *= 1.e8
 
         pk_list = []
-        for row in model:  # loop over 3 models (shape (500,))
-            y = np.log(row)
+        for row in model:  # loop over N models (shape (500,))
+            sign = np.sign(row)
+            y = np.log(np.abs(row)+1e-12)
             coef = np.polyfit(x, y, 8, w=w)
-            pol = np.poly1d(coef)
-            smooth = np.exp(pol(x))
+            smooth_amp = np.exp(np.polyval(coef, x))
+            smooth = sign * smooth_amp
             pk = row - smooth
             pk_list.append(pk)
 
         return np.vstack(pk_list)
-
-
 
     def _apply_peak_smoothing(self,pk,mu):
         """Apply non-linear smoothing to BAO peak model"""
@@ -158,7 +150,7 @@ class Fisher:
 
 
     @staticmethod
-    def print_bao(fisher_matrix,which):
+    def print_bao(fisher_matrix,which='result'):
         """Print BAO results from Fisher matrix"""
         cov = np.linalg.inv(fisher_matrix)
         sigma_dh = np.sqrt(cov[0,0])

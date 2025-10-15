@@ -7,6 +7,8 @@ import configparser
 import time 
 from pathlib import Path
 import logging
+from dataclasses import dataclass, asdict
+import sys
 
 import numpy as np
 
@@ -15,6 +17,32 @@ from lyaforecast import (
     Survey, PowerSpectrum, Fisher, get_file, 
     setup_logger
 )
+
+@dataclass
+class FlagStore:
+    lya_auto: bool
+    cross: bool
+    tracer_auto: bool
+
+    @property
+    def include_tracer(self) -> bool:
+        """return array of bool for included tracers"""
+        return list(asdict(self).values())
+    @property
+    def is_3x2pt(self) -> bool:
+        """Return True if all flags are True."""
+        return all(asdict(self).values())
+    
+# Redirect print to logging
+class LoggerWriter:
+    def __init__(self, level):
+        self.level = level
+    def write(self, message):
+        message = message.strip()
+        if message:
+            self.level(message)
+    def flush(self):
+        pass
 
 class Forecast:
     """Main LyaForecast class.
@@ -30,6 +58,7 @@ class Forecast:
         cfg_path : string
             Path to main.ini config file
         """
+
         init_start_time = time.time()
 
         print('Initialise forecast')
@@ -42,16 +71,28 @@ class Forecast:
         self.out_file = Path(self.config['output']['filename'])
         self.out_folder = self.out_file.parent
 
+        #setup logger
+        self.logger = setup_logger(self.out_folder)
+        self.logger.info('Running BAO forecast')
+
+        #hold spectra names (for including mulitple configs)
+        self.spectrum_names = {}
+
+        # which power spectra to forecast
+        self.flags = FlagStore(
+            lya_auto=self.config['control'].getboolean('lya auto'),
+            cross=self.config['control'].getboolean('cross'),
+            tracer_auto=self.config['control'].getboolean('tracer auto')
+        )
+
         # tracer types
         self._lya_tracer = self.config['lya forest'].get('tracer')
         self._tracer = self.config['tracer'].get('tracer')
         self._cross_tracer = 'lya_' + self._tracer
 
-        # which power spectra to forecast
-        self._auto_flag = self.config['control'].getboolean('lya auto')
-        self._cross_flag = self.config['control'].getboolean('cross')
-        self._tracer_auto_flag = self.config['control'].getboolean('tracer auto')
-
+        #not used currently - still unsure what to do.
+        self._add_spectum_names()
+  
         #initialise cosmology
         self._cosmo = CosmoCamb(self.config['cosmo'].get('filename'),
                                 self.config['cosmo'].getfloat('z_ref', None))
@@ -94,17 +135,13 @@ class Forecast:
         return self._power_spec
 
     def run_forecast(self):
-        #setup logger
-        logger = setup_logger(self.out_folder)
-        logger.info('Running BAO forecast')
-
-
+        
         sigma_at = np.zeros(self._survey.num_z_bins)
         sigma_ap = np.zeros(self._survey.num_z_bins)
         corr_coef = np.zeros(self._survey.num_z_bins)
 
         for iz, zc in enumerate(self._survey.z_bin_centres):
-            logger.info(f"z bin = [{self._survey.z_bin_edges[0,iz]}-"
+            self.logger.info(f"z bin = [{self._survey.z_bin_edges[0,iz]}-"
                         f"{self._survey.z_bin_edges[1,iz]}], bin centre = {zc}")
             
             # observed wavelength range from redshift limits
@@ -123,45 +160,55 @@ class Forecast:
             #initialise Fisher matrix computation class
             fisher = Fisher(self._power_spec,self._cosmo,num_modes_k)
   
-
             # Compute P(k, mu) for all mu at once
             # Resulting shape will be (len(mu), len(k))
             p3d_cache = {}
-            for tracer in ['lya', self._tracer, self._cross_tracer]:
-                #temporary, until I update all dependent functions
-                if not tracer == self._cross_tracer:
-                    tracer_name = tracer +  '_' +tracer
+            #TEMPORARY
+            corr_names_temp = ['lya', self._cross_tracer, self._tracer]
+            corr_names_cut = [c for j, c in enumerate(corr_names_temp)
+                   if self.flags.include_tracer[j]]
+                
+            for j,corr in enumerate(corr_names_cut):
+                # #temporary, until I update all dependent functions
+                if not corr == self._cross_tracer:
+                    corr_name = corr +  '_' + corr
+                    corr_names_cut[j] = corr_name
                 else:
-                    tracer_name = self._cross_tracer
-
-                p3d_cache[tracer] = abs(np.array([
+                    corr_name = self._cross_tracer
+                p3d_cache[corr] = (np.array([
                     self._power_spec.compute_p3d_hmpc_smooth(
                         zc, self._power_spec.k, mu, 
                         self._covariance.pix_width_kms,
                         self._covariance.pix_res_kms,
-                        tracer
+                        corr
                     )
                     for mu in self._power_spec.mu
                 ]))
-
+            
             #compute measured power spectra (e.g. including noise)
             p3d_obs_cache = {}
-            for tracer in ['lya', self._tracer, self._cross_tracer]:
-                #temporary, until I update all dependent functions
-                if not tracer == self._cross_tracer:
-                    tracer_name = tracer +  '_' +tracer
+            for j,corr in enumerate(corr_names_temp):
+                # #temporary, until I update all dependent functions
+                if not corr == self._cross_tracer:
+                    corr_name = corr +  '_' + corr
+                    corr_names_temp[j] = corr_name
                 else:
-                    tracer_name = self._cross_tracer
+                    corr_name = self._cross_tracer
 
-                p3d_obs_cache[tracer_name] = np.array([
+                p3d_obs_cache[corr_name] = np.array([
                     self._covariance.compute_total_power(self._power_spec.k,
                         mu,
-                        tracer)
+                        corr)
                     for mu in self._power_spec.mu])
+                
+            fisher_mat = fisher.compute_fisher(p3d_cache,p3d_obs_cache,corr_names_cut)
 
-            fisher_mat = fisher.compute_fisher(p3d_cache,p3d_obs_cache,self._lya_tracer)
+            if self.flags.is_3x2pt:
+                self.results_name = '3x2pt'
+            else:
+                self.results_name = ' + '.join(self.spectrum_names.values())
 
-            sigma_ap_z, sigma_at_z, corr_coef_z = fisher.print_bao(fisher_mat,f'3x2pt')
+            sigma_ap_z, sigma_at_z, corr_coef_z = fisher.print_bao(fisher_mat,self.results_name)
 
             sigma_ap[iz] = sigma_ap_z
             sigma_at[iz] = sigma_at_z
@@ -172,11 +219,22 @@ class Forecast:
         sigma_ap_full = 1./np.sqrt(np.sum(1./sigma_ap**2))
 
 
-        print(fr'\n  at (3x2pt)={sigma_at_full}'
-                fr', ap (3x2pt)={sigma_ap_full}')
+        self.logger.info(fr'Full: at ({self.results_name})={sigma_at_full}'
+                fr', ap ({self.results_name})={sigma_ap_full}')
        
         data = {}
         data["redshifts"] = self._survey.z_bin_centres
         data["mean redshift"] = self._cosmo.z_ref
         data["magnitudes"] = {self._survey.band:self._survey.maglist}
- 
+
+    def _add_spectum_names(self):
+        #needs to be edited for more than one config
+        if self.flags.lya_auto:
+            lya_auto_name = f'lya({self._lya_tracer})_lya({self._lya_tracer})'
+            self.spectrum_names['lya'] = lya_auto_name
+        if self.flags.cross:
+            cross_name = f'lya({self._lya_tracer})_{self._tracer}'
+            self.spectrum_names['cross'] = cross_name
+        if self.flags.tracer_auto:
+            tracer_auto_name = f'{self._tracer}_{self._tracer}'
+            self.spectrum_names['tracer auto'] = tracer_auto_name
