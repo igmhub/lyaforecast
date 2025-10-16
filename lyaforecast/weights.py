@@ -91,7 +91,7 @@ class Weights:
         # 2D density of lines of sight (units of 1/deg^2)
         aliasing = int_2 / (int_1**2 * self._forest_length)
         # weights include aliasing as signal
-        signal_power = self._p3d_w + self._p1d_w * aliasing
+        signal_power = self._p3d_w #+ self._p1d_w * aliasing
 
         weights = signal_power / (signal_power + noise_power)
 

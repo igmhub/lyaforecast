@@ -1,12 +1,10 @@
 #!/usr/bin/env python
+"""Plot terms that contribute to P_T (P3D, aliasing, effective noise) as a function of k."""
+
 import argparse
-from lyaforecast import Forecast
-from lyaforecast.plots import Plots
+import numpy as np
 import matplotlib.pyplot as plt
-import numpy as np 
-
-
-"""Compute survey volume (Mpc/h) as a function of redshift"""
+from lyaforecast import Forecast
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -15,14 +13,15 @@ def get_args() -> argparse.Namespace:
 
     parser.add_argument('--config', '-i',
                         type=str, 
-                        default=None, 
+                        default=None,
+                        nargs='+', 
                         help='Config file')
-
-    args = parser.parse_args()
-    return args
+    
+    return parser.parse_args()
 
 def _make_style(style='seaborn-1'):
     """Apply a Seaborn style with additional customizations."""
+    import matplotlib.pyplot as plt
     base_styles = {
         "seaborn-1": "seaborn-v0_8-notebook",
         "seaborn-2": "seaborn-darkgrid",
@@ -76,33 +75,56 @@ def _make_style(style='seaborn-1'):
     })
     return plt.style.context(base_style), plt.rc_context(custom_rc)
 
-if __name__ == "__main__":
+# Main execution block
+if __name__ == '__main__':
     args = get_args()
 
     with _make_style()[0], _make_style()[1]:
         fig, ax = plt.subplots(1, 1, figsize=(10, 6))
-        
-    forecast = Forecast(args.config)
-    
-    z_bin_edges = forecast.survey.z_bin_edges
-    zcentres = forecast.survey.z_bin_centres
-    survey_volume = np.zeros(zcentres.size)
-    for i, zc in enumerate(zcentres):
 
-        lmin = forecast.cosmo.LYA_REST * (1 + z_bin_edges[i,0])
-        lmax = forecast.cosmo.LYA_REST * (1 + z_bin_edges[i,1])
+    for j,cfg in enumerate(args.config):
+        forecast = Forecast(cfg)
+                
+        z_bin_edges, zc = forecast._get_z_bins()
+
+        lmin = forecast.cosmo.LYA_REST * (1 + z_bin_edges[0,0])
+        lmax = forecast.cosmo.LYA_REST * (1 + z_bin_edges[1,0])
 
         forecast.covariance(lmin, lmax)
+        forecast.covariance.compute_eff_density_and_noise()
+
+        p_n_eff = forecast.covariance._effective_noise_power[-1]
+        
+        k_hmpc = np.linspace(1e-2,0.5,500)
+        mus = [0.00001,0.5,1]
+        linestyles = ['solid','dashed','dotted']
+
+        for i,mu in enumerate(mus):
+
+            kp_hmpc = k_hmpc * mu
+            kt_hmpc = k_hmpc * np.sqrt(1-mu**2)
+
+            kp_skm = kp_hmpc / forecast.cosmo.velocity_from_distance(zc)
+            kt_deg = kt_hmpc * forecast.cosmo.distance_from_degrees(zc)
+
+            p3d = forecast.power_spec.compute_p3d_kms(zc,kt_deg,kp_skm,
+                                                        120,
+                                                        60,'lya')
+            
+            aliasing = forecast.covariance.compute_aliasing(zc,kt_deg,kp_skm)
+
+            ax.plot(k_hmpc, p3d, color='blue', label=r'$P_F$', alpha=0.5, linestyle=linestyles[i])
+            ax.plot(k_hmpc, aliasing, color='green', label=r'$P_w^\perp P_F^\mathrm{1D}$', alpha=0.5,linestyle=linestyles[i])
+            ax.plot(k_hmpc, p_n_eff * np.ones(500), color='purple', label=r'$P_N^\mathrm{eff}$', alpha=0.5,linestyle=linestyles[i])
+
+            if i == 0:
+                ax.legend(fontsize=20)
+
+
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_ylabel(r'Power $(k,\mu,z=2.75)$')
+    ax.set_xlabel(r'$k$ [$h$/Mpc]')
     
-        survey_volume[i] = forecast.covariance.get_survey_volume()
 
-    ax.plot(zcentres,survey_volume/1e6,color='blue',alpha=0.5)
-
-    ax.set_xscale('linear')
-    ax.set_yscale('linear')
-    ax.grid()
-    ax.set_ylabel(r'Volume $[h^{-1}$Gpc]')
-    ax.set_xlabel(r'$z$')
-    
-    fig.savefig(forecast.out_folder.joinpath('survey_volume_dz.png'))
-
+    fig.savefig(forecast.out_folder.joinpath('power_terms.png'))

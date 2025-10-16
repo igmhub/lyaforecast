@@ -1,12 +1,10 @@
 #!/usr/bin/env python
+"""Plot effective densities of measurements. For Lya it's the 2D effective density defined by McQuinn and White 2011. For tracers it's just the 3D density."""
+
 import argparse
-from lyaforecast import Forecast
-from lyaforecast.plots import Plots
+import numpy as np
 import matplotlib.pyplot as plt
-import numpy as np 
-
-
-"""Compute survey volume (Mpc/h) as a function of redshift"""
+from lyaforecast import Forecast
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -15,14 +13,13 @@ def get_args() -> argparse.Namespace:
 
     parser.add_argument('--config', '-i',
                         type=str, 
-                        default=None, 
+                        default=None,
                         help='Config file')
-
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 def _make_style(style='seaborn-1'):
     """Apply a Seaborn style with additional customizations."""
+    import matplotlib.pyplot as plt
     base_styles = {
         "seaborn-1": "seaborn-v0_8-notebook",
         "seaborn-2": "seaborn-darkgrid",
@@ -76,33 +73,28 @@ def _make_style(style='seaborn-1'):
     })
     return plt.style.context(base_style), plt.rc_context(custom_rc)
 
-if __name__ == "__main__":
+# Main execution block
+if __name__ == '__main__':
     args = get_args()
 
     with _make_style()[0], _make_style()[1]:
         fig, ax = plt.subplots(1, 1, figsize=(10, 6))
-        
-    forecast = Forecast(args.config)
-    
-    z_bin_edges = forecast.survey.z_bin_edges
-    zcentres = forecast.survey.z_bin_centres
-    survey_volume = np.zeros(zcentres.size)
-    for i, zc in enumerate(zcentres):
 
-        lmin = forecast.cosmo.LYA_REST * (1 + z_bin_edges[i,0])
-        lmax = forecast.cosmo.LYA_REST * (1 + z_bin_edges[i,1])
+        forecast = Forecast(args.config)
 
-        forecast.covariance(lmin, lmax)
-    
-        survey_volume[i] = forecast.covariance.get_survey_volume()
+        z = 2.5
+        k_min_hmpc = 0
+        k_max_hmpc = 0.5
+        num_k_bins = 500
+        k_hmpc = np.linspace(k_min_hmpc, k_max_hmpc, num_k_bins)
 
-    ax.plot(zcentres,survey_volume/1e6,color='blue',alpha=0.5)
+        k_skm = k_hmpc / forecast.cosmo.velocity_from_distance(z)
 
-    ax.set_xscale('linear')
-    ax.set_yscale('linear')
-    ax.grid()
-    ax.set_ylabel(r'Volume $[h^{-1}$Gpc]')
-    ax.set_xlabel(r'$z$')
-    
-    fig.savefig(forecast.out_folder.joinpath('survey_volume_dz.png'))
+        breakpoint()
+        p1d = forecast.power_spec.compute_p1d_palanque2013(z, k_skm)
 
+        ax.plot(k_skm, p1d, color='blue', alpha=0.5)
+        ax.set_ylabel('P1D [km/s]')
+        ax.set_xlabel(r'$k$ [s/km]')
+
+        fig.savefig(forecast.out_folder.joinpath('p1d.png'))

@@ -54,6 +54,8 @@ def from_script(args):
         w &= forecast.survey.maglist < ulim
 
         colours = ['blue','green','red']
+
+        #let's plot as a function of z instead of m.
         for i,zbc in enumerate(forecast.survey.z_bin_centres):
 
             print(f'Plotting neff for z={zbc}')

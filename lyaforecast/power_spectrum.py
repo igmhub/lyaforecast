@@ -33,7 +33,7 @@ class PowerSpectrum:
         self.dlogk = self.dk / self.k
 
         #bin edges
-        mu_edges = np.linspace(self._mu_min,self._mu_max, self._num_mu_bins)
+        mu_edges = np.linspace(self._mu_min,self._mu_max, self._num_mu_bins+1)
         self.mu = mu_edges[:-1] + np.diff(mu_edges)/2     
         self.dmu = np.diff(mu_edges)[0]
 

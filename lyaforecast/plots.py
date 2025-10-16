@@ -260,6 +260,7 @@ class Plots:
             qlf = self._survey.get_dn_dzdm
             # plot QL at different z
             linestyles = ['solid','dashed']
+            # savekeys = ['qso','lbg']
             for i,t in enumerate(['lya','tracer']):
                 ax.plot(m,gaussian_filter1d(qlf(2.0,m,t),0.7),label='z=2.0',
                            linestyle=linestyles[i],color='blue',alpha=0.5)
@@ -269,11 +270,17 @@ class Plots:
                            linestyle=linestyles[i],color='red',alpha=0.5)
                 ax.plot(m,gaussian_filter1d(qlf(3.5,m,t),0.7),label='z=3.5',
                            linestyle=linestyles[i],color='purple',alpha=0.5)
+                # np.savez(f'/Users/calum/Documents/Work/dn_dm_{savekeys[i]}.npz',
+                #          mags=m,z2=gaussian_filter1d(qlf(2.0,m,t),0.7),
+                #          z2_5=gaussian_filter1d(qlf(2.5,m,t),0.7),
+                #          z3=gaussian_filter1d(qlf(3.0,m,t),0.7),
+                #          z3_5=gaussian_filter1d(qlf(3.5,m,t),0.7))
+
                 if i == 0:
                     ax.legend(loc=2,fontsize=20)
             ax.set_yscale('log')
             ax.set_xlim(18,27)
-            ax.set_ylim(1e-3,)
+            ax.set_ylim(1e0,)
             ax.set_xlabel('$r$ mag',fontsize=20)
             ax.set_ylabel(r'$\frac{dN}{dmddeg^2}(z)$',fontsize=20)
             ax.grid()
@@ -435,28 +442,31 @@ class Plots:
                     ax.set_ylim(1e-1)
                     ax.set_xlim(3500,6000)
             else:
-                mags = [19,20,21,22]
+                mags = [19,20,21,22,23]
                 #zqs = [2,2.25,2.5,2.75,3,3.25,3.5,3.75,4,4.25,4.5,4.75]
-                zqs = np.linspace(2,3.5,10)
-                dz = zqs[1]-zqs[0]
-                lmax = 5500
+                zq = 2.5#np.linspace(2,3.5,10)
+                #dz = zqs[1]-zqs[0]
+                lmax = 4250
                 lmin = 3600
                 nb = 100
-                snr = np.zeros(nb)
+                # snr = np.zeros(nb)
                 snr_z = np.zeros(nb)
                 lam = np.linspace(lmin,lmax,nb)
+                
                 for k,mag in enumerate(mags):
-                    snr = 0
-                    for zq in zqs:
-                        for i,l in enumerate(lam):
-                            snr_z[i] = self._forecast.spectrograph.get_snr_per_ang(mag,zq,l)
-                        snr += snr_z/len(zqs)
+                    for i,l in enumerate(lam):
+                        snr_z[i] = self._forecast.spectrograph.get_snr_per_ang(mag,zq,l)
+                #     snr = 0
+                #     for zq in zqs:
+                #         for i,l in enumerate(lam):
+                #             snr_z[i] = self._forecast.spectrograph.get_snr_per_ang(mag,zq,l)
+                #         snr += snr_z/len(zqs)
                         #snr += snr_z * dz
 
-                    ax.plot(lam,gaussian_filter1d(snr,5),label=f'r={mag}',color=plt.cm.Set1(k))
+                    ax.plot(lam,gaussian_filter1d(snr_z,0.1),label=f'r={mag}',color=plt.cm.Set1(k))
 
             ax.legend(loc='lower left',fontsize=15)
-            ax.set_ylabel(r'SNR per $\AA$',fontsize=15)
+            ax.set_ylabel(r'SNR/$\AA$$(m,z=2.5)$',fontsize=15)
             ax.set_xlabel(r'$\lambda[\AA]$',fontsize=15)
             ax.set_yscale('log')
             ax.grid(which='both')
