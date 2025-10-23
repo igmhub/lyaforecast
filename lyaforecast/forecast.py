@@ -238,7 +238,7 @@ class Forecast:
         data = {}
         data["redshifts"] = self._survey.z_bin_centres
         data["mean redshift"] = self._cosmo.z_ref
-        data["magnitudes"] = {self._survey.band: self._survey.maglist}
+        # data["magnitudes"] = {self._survey.band: self._survey.maglist}
         data["sigma_at"] = sigma_at
         data["sigma_ap"] = sigma_ap
         data["corr_coef"] = corr_coef
