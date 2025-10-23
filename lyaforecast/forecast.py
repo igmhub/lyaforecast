@@ -239,6 +239,14 @@ class Forecast:
         data["redshifts"] = self._survey.z_bin_centres
         data["mean redshift"] = self._cosmo.z_ref
         data["magnitudes"] = {self._survey.band: self._survey.maglist}
+        data["sigma_at"] = sigma_at
+        data["sigma_ap"] = sigma_ap
+        data["corr_coef"] = corr_coef
+        data["sigma_at_full"] = sigma_at_full
+        data["sigma_ap_full"] = sigma_ap_full
+        self.data = data
+
+        return data
 
     def _add_spectum_names(self):
         # needs to be edited for more than one config
