@@ -4,7 +4,7 @@
 
 """
 import configparser
-import time 
+import time
 from pathlib import Path
 import logging
 from dataclasses import dataclass, asdict
@@ -14,7 +14,7 @@ import numpy as np
 
 from lyaforecast import (
     CosmoCamb, Covariance, Spectrograph,
-    Survey, PowerSpectrum, Fisher, get_file, 
+    Survey, PowerSpectrum, Fisher, get_file,
     setup_logger
 )
 
@@ -92,13 +92,16 @@ class Forecast:
 
         #not used currently - still unsure what to do.
         self._add_spectum_names()
-  
-        #initialise cosmology
-        self._cosmo = CosmoCamb(self.config['cosmo'].get('filename'),
-                                self.config['cosmo'].getfloat('z_ref', None))
 
         #load survey instance
         self._survey = Survey(self.config)
+
+        #initialise cosmology
+        self._cosmo = CosmoCamb(
+            self.config['cosmo'].get('filename'),
+            self.config['cosmo'].getfloat('z_ref', None),
+            z_centres=self._survey.z_bin_centres
+        )
 
         #load spectrograph instance
         self._spectrograph = Spectrograph(self.config, self._survey)

@@ -2,13 +2,14 @@ import numpy as np
 import camb
 from lyaforecast.utils import get_file
 
+
 class CosmoCamb:
     """Compute cosmological functions using CAMB"""
-    
-    SPEED_LIGHT = 2.998e5 #km/s
-    LYA_REST = 1215.67 #Angstroms
 
-    def __init__(self,ini,z_ref=None):
+    SPEED_LIGHT = 2.998e5  # km/s
+    LYA_REST = 1215.67  # Angstroms
+
+    def __init__(self, ini, z_ref=None, z_centres=[]):
         """Setup cosmological model.
         Reference z is set in config with other parameters"""
 
@@ -18,8 +19,10 @@ class CosmoCamb:
         # Set effective redshift of survey
         if z_ref is None:
             if self._pars.Transfer.PK_num_redshifts == 0:
-                raise ValueError("You must specify at least one reference"
-                                "redshift to evaluate the power spectrum.")
+                raise ValueError(
+                    "You must specify at least one reference"
+                    "redshift to evaluate the power spectrum."
+                )
             else:
                 # This will raise an error with CAMB anyway, but here for clarity.
                 assert len(self._pars.Transfer.PK_redshifts) == self._pars.Transfer.PK_num_redshifts
@@ -33,8 +36,18 @@ class CosmoCamb:
         self.results = camb.get_results(self._pars)
 
         self.growth_rate = self.results.get_fsigma8()[0] / self.results.get_sigma8()[0]
+        self.sigma8 = self.results.get_sigma8()[0]
 
-        
+        z_bins = np.array(z_centres)
+        z_bins[::-1].sort()
+
+        self._pars.Transfer.PK_redshifts = list(z_bins)
+        self._pars.Transfer.PK_num_redshifts = len(z_bins)
+        self.results_bins = camb.get_results(self._pars)
+        self.z_bins = np.array(z_centres)
+        self.sigma8_zbins = np.array(self.results_bins.get_sigma8())[::-1]
+        self.growth_rate_zbins = np.array(self.results_bins.get_fsigma8())[::-1] / self.sigma8_zbins
+
     def get_pk_lin(self,k,kmin=1.e-4,kmax=1.e1,npoints=1000):
         """Return linear power interpolator in units of h/Mpc, at zref"""
         kh,_,pk = self.results.get_matter_power_spectrum(minkh=kmin,
