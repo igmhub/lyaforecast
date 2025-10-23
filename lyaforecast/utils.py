@@ -7,6 +7,7 @@ import lyaforecast
 import numpy as np
 import mcfit
 
+
 def check_file(input_path):
     """ Verify a file exists, if not raise error
 
@@ -21,6 +22,7 @@ def check_file(input_path):
         return input_path
     else:
         raise RuntimeError('The path does not exist: ', input_path)
+
 
 def get_file(path):
     """ Find files on the system.
@@ -44,23 +46,24 @@ def get_file(path):
     resource = lyacast_path / 'resources' / input_path
     if resource.is_file():
         return resource
-    
+
     # Check if it's a data source
     data = lyacast_path / 'resources/data' / input_path
     if data.is_file():
         return data
-    
+
     # Check if it's a default config
     default_cfg = lyacast_path / 'resources/default_configs' / input_path
     if default_cfg.is_file():
         return default_cfg
-    
+
     # Check if it's a camb config
     camb_cfg = lyacast_path / 'resources/camb_configs' / input_path
     if camb_cfg.is_file():
         return camb_cfg
 
     raise RuntimeError('The path does not exist: ', input_path, 'or', resource)
+
 
 def get_dir(path):
     """ Find directory on the system.
@@ -85,7 +88,7 @@ def get_dir(path):
     resource = lyacast_path / 'resources' / input_path
     if resource.is_dir():
         return resource
-    
+
     # Check if it's a data source (folder)
     data = lyacast_path / 'resources/data' / input_path
     if data.is_dir():
@@ -93,17 +96,25 @@ def get_dir(path):
 
     raise RuntimeError('The directory does not exist: ', input_path)
 
-def setup_logger(out_folder):
 
+def setup_logger(out_folder):
     logger = logging.getLogger(__name__)
     logging.basicConfig(
-    level=logging.INFO,
-    format='%(levelname)s - %(message)s'
-        )
+        level=logging.INFO,
+        format='%(levelname)s - %(message)s'
+    )
 
     # File handler (WARNING and above)
     file_handler = logging.FileHandler(f"{out_folder}/forecast.log")
-    file_handler.setLevel(logging.WARNING)
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(
+        logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    )
+    logger.addHandler(file_handler)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+    logger.addHandler(console_handler)
 
     return logger
-
