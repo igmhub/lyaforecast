@@ -46,28 +46,29 @@ class CosmoCamb:
         self.results_bins = camb.get_results(self._pars)
         self.z_bins = np.array(z_centres)
         self.sigma8_zbins = np.array(self.results_bins.get_sigma8())[::-1]
+        self.growth_factor_ratios = self.sigma8_zbins / self.sigma8
         self.growth_rate_zbins = np.array(self.results_bins.get_fsigma8())[::-1] / self.sigma8_zbins
 
-    def get_pk_lin(self,k,kmin=1.e-4,kmax=1.e1,npoints=1000):
+    def get_pk_lin(self, k, kmin=1.e-4, kmax=1.e1, npoints=1000):
         """Return linear power interpolator in units of h/Mpc, at zref"""
-        kh,_,pk = self.results.get_matter_power_spectrum(minkh=kmin,
-                                                maxkh=kmax,npoints=npoints)
-        return np.interp(k,kh,pk[0,:])
+        kh, _, pk = self.results.get_matter_power_spectrum(
+            minkh=kmin, maxkh=kmax, npoints=npoints)
+        return np.interp(k, kh, pk[0, :])
 
-    def velocity_from_distance(self,z):
+    def velocity_from_distance(self, z):
         """Conversion factor from Mpc/h to km/s, at redshift z."""
         return (self.results.hubble_parameter(z) / self._pars.H0 / (1 + z)) * 100.0
 
-    def velocity_from_wavelength(self,z):
+    def velocity_from_wavelength(self, z):
         """Conversion factor from lambda_obs to km/s, at redshift z."""
         return self.SPEED_LIGHT / self.LYA_REST / (1+z) 
 
-    def distance_from_wavlength(self,z):
+    def distance_from_wavelength(self, z):
         """Conversion factor from lambda_obs to Mpc/h, at redshift z."""
         return self.velocity_from_wavelength(z) / self.velocity_from_distance(z)
 
-    def distance_from_degrees(self,z):
+    def distance_from_degrees(self, z):
         """Conversion factor from degrees to Mpc/h, at redshift z."""
         dmpc_drad = self.results.angular_diameter_distance(z) * (1+z)
-        #print('dMpc_drad',dMpc_drad)
+        # print('dMpc_drad',dMpc_drad)
         return dmpc_drad * (np.pi/180.0) * (self._pars.H0 / 100.0)

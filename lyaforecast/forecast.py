@@ -170,7 +170,7 @@ class Forecast:
             num_modes_k = self._covariance.num_modes
 
             # initialise Fisher matrix computation class
-            fisher = Fisher(self._power_spec, self._cosmo, num_modes_k)
+            fisher = Fisher(self._power_spec, self._cosmo, num_modes_k, zbin_index=iz)
 
             # Compute P(k, mu) for all mu at once
             # Resulting shape will be (len(mu), len(k))
@@ -191,7 +191,7 @@ class Forecast:
                     corr_name = self._cross_tracer
                 p3d_cache[corr] = (np.array([
                     self._power_spec.compute_p3d_hmpc_smooth(
-                        zc, self._power_spec.k, mu, 
+                        zc, self._power_spec.k, mu,
                         self._covariance.pix_width_kms,
                         self._covariance.pix_res_kms,
                         corr
@@ -214,7 +214,8 @@ class Forecast:
                         self._power_spec.k, mu, corr)
                     for mu in self._power_spec.mu])
 
-            fisher_mat = fisher.compute_fisher(p3d_cache, p3d_obs_cache, corr_names_cut)
+            fisher_mat = fisher.compute_fisher(
+                p3d_cache, p3d_obs_cache, corr_names_cut)
 
             if self.flags.is_3x2pt:
                 self.results_name = '3x2pt'

@@ -55,7 +55,7 @@ class Survey:
         self.tracer = config['tracer'].get('tracer', None)
         if self.lya_tracer not in self.TRACER_OPTIONS or self.tracer not in self.TRACER_OPTIONS:
             raise ValueError(f'Please choose from accepted source tracers: {self.TRACER_OPTIONS}')
-        
+
         # densities
         self.lya_density = config['lya forest'].getfloat('target density')
         self.tracer_density = config['tracer'].getfloat('target density')
@@ -63,7 +63,7 @@ class Survey:
         # dn/dzdm
         self._source_dndz = self._setup_dndzdm_lya(self._lya_tracer_dzdz_file)
         if self.tracer is not None:
-           self._tracer_dndz = self._setup_dndzdm_tracer(self._tracer_dzdz_file)
+            self._tracer_dndz = self._setup_dndzdm_tracer(self._tracer_dzdz_file)
 
     # def _get_z_bins(self,config):
     #     survey_cfg = config['survey']
