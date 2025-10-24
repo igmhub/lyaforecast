@@ -56,6 +56,7 @@ class Forecast:
     """
     # _survey_properties = None
     # _spectro_properties = None
+    _tracer_biases = None
 
     def __init__(self, cfg_path):
         """
@@ -172,6 +173,10 @@ class Forecast:
             # initialise Fisher matrix computation class
             fisher = Fisher(self._power_spec, self._cosmo, num_modes_k, zbin_index=iz)
 
+            # Update tracer bias if provided
+            if self._tracer_biases is not None:
+                self._power_spec.bias.set_tracer_bias(self._tracer_biases[iz], zbin_index=iz)
+
             # Compute P(k, mu) for all mu at once
             # Resulting shape will be (len(mu), len(k))
             p3d_cache = {}
@@ -260,3 +265,16 @@ class Forecast:
         if self.flags.tracer_auto:
             tracer_auto_name = f'{self._tracer}_{self._tracer}'
             self.spectrum_names['tracer auto'] = tracer_auto_name
+
+    def add_tracer_biases(self, tracer_biases):
+        """Add tracer biases instance to forecast.
+
+        Parameters
+        ----------
+        tracer_biases : TracerBiases
+            Instance of TracerBiases class.
+        """
+        assert len(tracer_biases.z_bins) == self._survey.num_z_bins, (
+            "Length of tracer_biases.z_bins must match number of survey z bins."
+        )
+        self._tracer_biases = tracer_biases

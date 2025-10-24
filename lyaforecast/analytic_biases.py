@@ -6,6 +6,8 @@ class AnalyticBias:
     """Class to store analytic formulae for biases of Lya P3D, including non-linear corrections.
         These will later be handled by ForestFlow, currently parameter values are out-of-date."""
     OPTIONS = ['lya', 'qso', 'lbg', 'lae']
+    _tracer_bias = None
+    _zbin_index = None
 
     def __init__(self, cosmo):
         self._cosmo = cosmo
@@ -86,9 +88,9 @@ class AnalyticBias:
 
         return beta_zref*((1 + z)/(1 + zref))**alpha
 
-    def _small_scale_correction(self, k_hmpc, mu, hich):
+    def _small_scale_correction(self, k_hmpc, mu, which):
         """Analytic formula for small-scales correction to Lyman alpha P3D(z,k,mu) 
-            from McDonald (2003). 
+            from McDonald (2003).
             Values computed at z=2.33, it would be great to have z-evolution.
             Values are cosmology dependent, but we ignore it here.
             Wavenumbers in h/Mpc. """
@@ -104,7 +106,7 @@ class AnalyticBias:
 
     def compute_bias(self, z, k_hmpc, mu, linear=True, which='lya'):
         """Analytic formula for scale-dependent bias of Lyman alpha P3D(z,k,mu),
-             including Kaiser and small scale correction.  
+             including Kaiser and small scale correction.
             Basically, it retursn P_F(k,mu) / P_lin(k,mu)
             Values computed at z=2.33, it would be great to have z-evolution.
             Values are cosmology dependent, but we ignore it here.
@@ -112,6 +114,27 @@ class AnalyticBias:
             Wavenumbers in h/Mpc. """
 
         tracers = which.split('_')
+
+        if self._tracer_bias is not None:
+            kaiser_lya = None
+            kaiser_tracer = None
+            for t in tracers:
+                if t == 'lya':
+                    kaiser_lya = self._get_density_bias(z, t)
+                    kaiser_lya *= (1 + self._get_beta_rsd(z, t) * mu**2)
+                else:
+                    growth_rate = self._cosmo.growth_rate_zbins[self._zbin_index]
+                    kaiser_tracer = self._tracer_bias * (
+                        1 + growth_rate/self._tracer_bias * mu**2)
+
+            if kaiser_tracer is None:
+                kaiser = kaiser_lya**2
+            elif kaiser_lya is None:
+                kaiser = kaiser_tracer**2
+            else:
+                kaiser = kaiser_lya * kaiser_tracer
+
+            return kaiser
 
         if len(tracers) > 1:
             b = self._get_density_bias(z, tracers[0]) * self._get_density_bias(z, tracers[1])
@@ -126,3 +149,7 @@ class AnalyticBias:
             return kaiser
         else:
             return kaiser * self._small_scale_correction(k_hmpc, mu, which)
+
+    def set_tracer_bias(self, bias, zbin_index):
+        self._tracer_bias = bias
+        self._zbin_index = zbin_index
