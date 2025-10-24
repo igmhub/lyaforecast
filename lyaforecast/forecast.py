@@ -274,7 +274,7 @@ class Forecast:
         tracer_biases : TracerBiases
             Instance of TracerBiases class.
         """
-        assert len(tracer_biases.z_bins) == self._survey.num_z_bins, (
-            "Length of tracer_biases.z_bins must match number of survey z bins."
+        assert len(tracer_biases) == self._survey.num_z_bins, (
+            "Length of tracer_biases must match number of survey z bins."
         )
         self._tracer_biases = tracer_biases

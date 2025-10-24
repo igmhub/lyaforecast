@@ -153,8 +153,6 @@ class Fisher:
             f = self._cosmo.growth_rate
 
         sig_nl_par = (1 + f) * sig_nl_perp  # Mpc/h
-        print('zbin_index: ', zbin_index)
-        print('sig_nl_par, sig_nl_perp: ', sig_nl_par, sig_nl_perp)
         return np.exp(-0.5 * ((sig_nl_par * kp)**2 + (sig_nl_perp * kt)**2))
 
     @staticmethod
