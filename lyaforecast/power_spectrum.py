@@ -62,7 +62,7 @@ class PowerSpectrum:
 
         return p1d_kms
 
-    def compute_p3d_kms(self, z, kt_deg, kp_kms, res_kms, pix_kms, which='lya'):
+    def compute_p3d_kms_smooth(self, z, kt_deg, kp_kms, res_kms, pix_kms, which='lya'):
         """3D Lya power spectrum in observed coordinates.
             Power smoothed with pixel width and resolution.
             If self._linear=True, it will ignore small scale correction."""
@@ -83,8 +83,14 @@ class PowerSpectrum:
         # convert resolution to kms
 
         # smoothing (pixelization and resolution)
-        kernel = self._spectrograph.smooth_kernel_kms(pix_kms, res_kms, kp_kms)
-        p3d_degkms *= kernel**2
+        if 'lya' in which:
+            kernel = self._spectrograph.smooth_kernel_kms(pix_kms, res_kms, kp_kms)
+
+            if which == 'lya':
+                p3d_degkms *= kernel**2
+            else:
+                # cross-power, smooth only Lya component
+                p3d_degkms *= kernel
 
         return p3d_degkms
 
@@ -112,12 +118,19 @@ class PowerSpectrum:
 
         # get linear power at zrefs
         p3d_hmpc = self.compute_p3d_hmpc(z, k_hmpc, mu, which)
-        p3d_degkms = p3d_hmpc * dkms_dhmpc / dhmpc_ddeg**2
 
-        kernel = self._spectrograph.smooth_kernel_kms(pix_kms, res_kms, kp_kms)
-        p3d_degkms *= kernel**2
+        if 'lya' in which:
+            p3d_degkms = p3d_hmpc * dkms_dhmpc / dhmpc_ddeg**2
 
-        p3d_hmpc = p3d_degkms * dhmpc_ddeg**2 / dkms_dhmpc
+            kernel = self._spectrograph.smooth_kernel_kms(pix_kms, res_kms, kp_kms)
+
+            if which == 'lya':
+                p3d_degkms *= kernel**2
+            else:
+                # cross-power, smooth only Lya component
+                p3d_degkms *= kernel
+
+            p3d_hmpc = p3d_degkms * dhmpc_ddeg**2 / dkms_dhmpc
 
         return p3d_hmpc
 

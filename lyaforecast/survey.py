@@ -182,7 +182,11 @@ class Survey:
         if (self.tracer == 'lbg') | (self.tracer == 'lae'):
             # smooth (currently) noisy dndz
             sigma_smooth = 1.5
-            tdNdmdzddeg2 = gaussian_filter1d(tdNdmdzddeg2, sigma_smooth, axis=0)
+            tdNdmdzddeg2_smooth = copy.deepcopy(tdNdmdzddeg2)
+            for i, dndm in enumerate(tdNdmdzddeg2):
+                tdNdmdzddeg2_smooth[i] = gaussian_filter1d(dndm, sigma_smooth, axis=0)
+
+            tdNdmdzddeg2 = tdNdmdzddeg2_smooth
 
         interpolator = RectBivariateSpline(
             z, m, tdNdmdzddeg2, bbox=[self._zmin, self._zmax, self._tracer_mmin, self._tracer_mmax],

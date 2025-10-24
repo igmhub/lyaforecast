@@ -49,7 +49,7 @@ class Weights:
         assert which in self.OPTIONS, 'Tracer option invalid'
 
         # pre-compute power spectra for weighting
-        self._p3d_w = self._powerspec.compute_p3d_kms(
+        self._p3d_w = self._powerspec.compute_p3d_kms_smooth(
             self._z_bin, self.kt_w_deg, self.kp_w_kms, self._res_kms, self._pix_kms, which)
 
         self._p1d_w = self._powerspec.compute_p1d_kms(
@@ -192,7 +192,7 @@ class Weights:
         return dn_dkms
 
     def compute_tracer_weights(self, tracer):
-        p3d = self._powerspec.compute_p3d_kms(
+        p3d = self._powerspec.compute_p3d_kms_smooth(
             self._z_bin, self.kt_w_deg, self.kp_w_kms, self._res_kms, self._pix_kms, tracer)
 
         p_n = 1 / self.get_n_tracer()

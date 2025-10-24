@@ -229,7 +229,7 @@ class Covariance:
     def _compute_total_power_lya(self, kt_deg, kp_kms):
         """Sum of 3D Lya power, aliasing and effective noise power in mpc/h^3"""
 
-        p3d = self._power_spec.compute_p3d_kms(
+        p3d = self._power_spec.compute_p3d_kms_smooth(
             self._z_mean, kt_deg, kp_kms, self._res_kms, self._pix_kms, 'lya')
         aliasing = (
             self._aliasing_weights[-1] *
@@ -247,10 +247,10 @@ class Covariance:
         p3d = self._power_spec.compute_p3d_hmpc(self._z_mean, k_hmpc, mu, which=self._tracer)
         # in 1/deg2km/s
         density_deg2kms = self._weights.get_n_tracer()[-1]
-        print('here: density deg2kms ', density_deg2kms)
+        # print('here: density deg2kms ', density_deg2kms)
         # in 1/mpc/h^3
         density_mpc3 = density_deg2kms / self._angle_to_distance**2 * self._distance_to_velocity
-        print('here: density mpc3 ', density_mpc3)
+        # print('here: density mpc3 ', density_mpc3)
 
         total_power_mpc = p3d + 1 / density_mpc3
 
@@ -260,7 +260,8 @@ class Covariance:
         """Compute observed power from cross-correlation of forests and galaxies/quasars.
             Should be no noise contributions in theory."""
 
-        p3d = self._power_spec.compute_p3d_hmpc(self._z_mean, k_hmpc, mu, which=tracer)
+        p3d = self._power_spec.compute_p3d_hmpc_smooth(
+            self._z_mean, k_hmpc, mu, self._pix_kms, self._res_kms, which=tracer)
 
         return (p3d)
 
@@ -358,14 +359,14 @@ class Covariance:
         kt_deg = kt_hmpc * dhmpc_ddeg
 
         total_power_lya_degkms = self._compute_total_power_lya(z, kt_deg, kp_kms)
-        noise_lya = total_power_lya_degkms - self._power_spec.compute_p3d_kms(
+        noise_lya = total_power_lya_degkms - self._power_spec.compute_p3d_kms_smooth(
             z, kt_deg, kp_kms, self._res_kms, self._pix_kms, 'lya')
         # lya
-        np_lya = self._power_spec.compute_p3d_kms(
+        np_lya = self._power_spec.compute_p3d_kms_smooth(
             z, kt_deg, kp_kms, self._res_kms, self._pix_kms, 'lya') / noise_lya[-1]
 
         # tracer
-        np_tracer = self._power_spec.compute_p3d_kms(
+        np_tracer = self._power_spec.compute_p3d_kms_smooth(
             z, kt_deg, kp_kms, self._res_kms, self._pix_kms, self._tracer) / self._tracer_noise_power[-1]
 
         return np_lya, np_tracer
@@ -407,7 +408,7 @@ class Covariance:
         volume_hmpc = volume_degkms * dhmpc_ddeg**2 / dkms_dmpch
 
         # compute power in km/s
-        p3d_tracer = self._power_spec.compute_p3d_kms(
+        p3d_tracer = self._power_spec.compute_p3d_kms_smooth(
             z, kt_deg, kp_kms, self._res_kms, self._pix_kms, self._tracer)
 
         # We assume weights module is initialised.
@@ -438,7 +439,7 @@ class Covariance:
 
         # cross
         cross_tracer = 'lya_' + self._tracer
-        cross = self._power_spec.compute_p3d_hmpc(z, k_hmpc, mu, which=cross_tracer)
+        cross = self._power_spec.compute_p3d_hmpc_smooth(z, k_hmpc, mu, self._pix_kms, self._res_kms, which=cross_tracer)
 
         # tracer auto
         tracer_auto = self._power_spec.compute_p3d_hmpc(z, k_hmpc, mu, which=self._tracer)
