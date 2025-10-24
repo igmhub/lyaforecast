@@ -32,7 +32,7 @@ class Covariance:
         if self._tracer not in self.TRACER_OPTIONS:
             raise ValueError(f'Please choose from accepted tracers: {self.TRACER_OPTIONS}')
 
-        # These will be dependent on redshift bins, 
+        # These will be dependent on redshift bins,
         # which are passed during foreacast run (for now).
         self.lmin = None
         self.lmax = None
@@ -244,14 +244,13 @@ class Covariance:
         return total_power_mpc
 
     def _compute_total_power_tracer(self, k_hmpc, mu):
-        p3d = self._power_spec.compute_p3d_hmpc_smooth(
-            self._z_mean, k_hmpc, mu, self._pix_kms, self._res_kms, self._tracer)
+        p3d = self._power_spec.compute_p3d_hmpc(self._z_mean, k_hmpc, mu, which=self._tracer)
         # in 1/deg2km/s
         density_deg2kms = self._weights.get_n_tracer()[-1]
-        # print('here: density deg2kms ',density_deg2kms)
+        print('here: density deg2kms ', density_deg2kms)
         # in 1/mpc/h^3
         density_mpc3 = density_deg2kms / self._angle_to_distance**2 * self._distance_to_velocity
-        # print('here: density mpc3 ',density_mpc3)
+        print('here: density mpc3 ', density_mpc3)
 
         total_power_mpc = p3d + 1 / density_mpc3
 
@@ -265,7 +264,7 @@ class Covariance:
 
         return (p3d)
 
-    ### Below this will soon be degraded functions ###
+    # Below this will soon be degraded functions ###
     def compute_neff_2D_lya(self, k_hmpc, mu):
         """Effective 2D density of lya forest skewers, as defined in McQuinn and White 2014.
         1 / n_eff^2D = P_w + P_N / P1D"""
@@ -336,7 +335,7 @@ class Covariance:
 
         # self._w_lya = self._weights._p3d_w / (self._weights._p3d_w + power_variance)
 
-        # If not per magnitude, return power var for mmax only. 
+        # If not per magnitude, return power var for mmax only.
         # Otherwise as a function of m input.
         if not self.per_mag:
             power_variance = power_variance[-1]
@@ -371,23 +370,23 @@ class Covariance:
 
         return np_lya, np_tracer
 
-    def compute_tracer_power_variance(self, k_hmpc, mu):
-        """The squared fractional error on the 3D bandpower of quasars, computed in h/Mpc.
-            The result is the denominator of the fisher matrix calculation."""
+    # def compute_tracer_power_variance(self, k_hmpc, mu):
+    #     """The squared fractional error on the 3D bandpower of quasars, computed in h/Mpc.
+    #         The result is the denominator of the fisher matrix calculation."""
 
-        z = self._mean_z()
+    #     z = self._mean_z()
 
-        vol_element = k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / (2 * np.pi**2)
-        eff_vol = self._compute_tracer_eff_vol(k_hmpc, mu)
-        p3d = self._power_spec.compute_p3d_hmpc_smooth(
-            z, k_hmpc, mu, self._pix_kms, self._res_kms, self._tracer)
+    #     vol_element = k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / (2 * np.pi**2)
+    #     eff_vol = self._compute_tracer_eff_vol(k_hmpc, mu)
+    #     p3d = self._power_spec.compute_p3d_hmpc_smooth(
+    #         z, k_hmpc, mu, self._pix_kms, self._res_kms, self._tracer)
 
-        power_variance = 2 * p3d**2 / (eff_vol * vol_element)
+    #     power_variance = 2 * p3d**2 / (eff_vol * vol_element)
 
-        if not self.per_mag:
-            power_variance = power_variance[-1]
+    #     if not self.per_mag:
+    #         power_variance = power_variance[-1]
 
-        return power_variance
+    #     return power_variance
 
     def _compute_tracer_eff_vol(self, k_hmpc, mu):
 

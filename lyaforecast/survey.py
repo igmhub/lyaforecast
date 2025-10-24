@@ -4,6 +4,7 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline, UnivariateSpline
 from lyaforecast.utils import get_file
 from scipy.ndimage import gaussian_filter1d
+import copy
 
 
 class Survey:
@@ -133,7 +134,11 @@ class Survey:
         if self.lya_tracer == 'lbg':
             # smooth (currently) noisy dndz
             sigma_smooth = 1.5
-            tdNdmdzddeg2 = gaussian_filter1d(tdNdmdzddeg2, sigma_smooth, axis=0)
+            tdNdmdzddeg2_smooth = copy.deepcopy(tdNdmdzddeg2)
+            for i, dndm in enumerate(tdNdmdzddeg2):
+                tdNdmdzddeg2_smooth[i] = gaussian_filter1d(dndm, sigma_smooth, axis=0)
+
+            tdNdmdzddeg2 = tdNdmdzddeg2_smooth
 
         interpolator = RectBivariateSpline(
             z, m, tdNdmdzddeg2, bbox=[self._zmin, self._zmax, self._lya_mmin, self._lya_mmax],
@@ -145,9 +150,9 @@ class Survey:
     def _setup_dndzdm_tracer(self, file):
         """Setup dndz/dm from file"""
 
-        z, m, tdNdmdzddeg2 = np.loadtxt(file, unpack=True)
-        z = np.unique(z)
-        m = np.unique(m)
+        z_arr, m_arr, tdNdmdzddeg2 = np.loadtxt(file, unpack=True)
+        z = np.unique(z_arr)
+        m = np.unique(m_arr)
 
         # scale density of quasars to desired number. By default taken straight from QLF
         if self.tracer_density is not None:

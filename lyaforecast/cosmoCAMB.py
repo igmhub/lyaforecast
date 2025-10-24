@@ -61,7 +61,7 @@ class CosmoCamb:
 
     def velocity_from_wavelength(self, z):
         """Conversion factor from lambda_obs to km/s, at redshift z."""
-        return self.SPEED_LIGHT / self.LYA_REST / (1+z) 
+        return self.SPEED_LIGHT / self.LYA_REST / (1+z)
 
     def distance_from_wavelength(self, z):
         """Conversion factor from lambda_obs to Mpc/h, at redshift z."""

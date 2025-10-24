@@ -195,10 +195,11 @@ class Forecast:
                 else:
                     corr_name = self._cross_tracer
                 p3d_cache[corr] = (np.array([
-                    self._power_spec.compute_p3d_hmpc_smooth(
+                    # self._power_spec.compute_p3d_hmpc_smooth(
+                    self._power_spec.compute_p3d_hmpc(
                         zc, self._power_spec.k, mu,
-                        self._covariance.pix_width_kms,
-                        self._covariance.pix_res_kms,
+                        # self._covariance.pix_width_kms,
+                        # self._covariance.pix_res_kms,
                         corr
                     )
                     for mu in self._power_spec.mu
