@@ -185,24 +185,22 @@ class Weights:
         """Compute tracer density as a function of maximum magnitude"""
 
         mags = self._survey.maglist
-        dn_dkmsdm = self._get_dn_dkmsdm(self._z_bin,self._survey.maglist,which='tracer')
+        dn_dkmsdm = self._get_dn_dkmsdm(self._z_bin, self._survey.maglist, which='tracer')
         dm = mags[1] - mags[0]
         dn_dkms = np.cumsum(dn_dkmsdm * dm)
- 
+
         return dn_dkms
-    
-    def compute_tracer_weights(self,tracer):
-        p3d = self._powerspec.compute_p3d_kms(self._z_bin,self.kt_w_deg
-                                                      ,self.kp_w_kms,self._res_kms,
-                                                      self._pix_kms,tracer)
-        
+
+    def compute_tracer_weights(self, tracer):
+        p3d = self._powerspec.compute_p3d_kms(
+            self._z_bin, self.kt_w_deg, self.kp_w_kms, self._res_kms, self._pix_kms, tracer)
+
         p_n = 1 / self.get_n_tracer()
 
         weights = p3d / (p3d + p_n)
 
-        return weights  
-        
-    
+        return weights
+
     def _get_pix_var_m(self):
         """Noise pixel variance as a function of magnitude (dimensionless)"""
 

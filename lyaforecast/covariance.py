@@ -1,7 +1,8 @@
 import numpy as np
 from lyaforecast.weights import Weights
 
-class Covariance: 
+
+class Covariance:
     """Compute covariance matrix components for given tracers, for a given survey.
         Different redshift bins are treated as independent, and right
         now this object only deals with one redshift bin at a time."""
