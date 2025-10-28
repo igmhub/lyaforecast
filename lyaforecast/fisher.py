@@ -4,10 +4,11 @@ import numpy as np
 
 
 class Fisher:
-    def __init__(self, power_spec, cosmo, number_modes, zbin_index=None):
+    def __init__(self, power_spec, cosmo, number_modes, zbin_index=None, reconstruction_factor=1.0):
         self._power_spec = power_spec
         self._cosmo = cosmo
         self._num_modes = number_modes
+        self._reconstruction_factor = reconstruction_factor
 
         # currently hard coded for BAO only
         npars = 2
@@ -25,7 +26,7 @@ class Fisher:
         # then do vectorised.
         for i, mu in enumerate(self._power_spec.mu):
             model_mu = np.stack([models[k][i, :] for k in models.keys()], axis=0)
-            dmodel_dlk = self.compute_derivatives(model_mu, mu)
+            dmodel_dlk = self.compute_derivatives(model_mu, mu, spectra_list)
             pre_factor_mu = np.outer([mu**2, 1-mu**2], [mu**2, 1-mu**2])
 
             # measured power spectra
@@ -93,7 +94,7 @@ class Fisher:
 
         return C_array, label_to_index
 
-    def compute_derivatives(self, model, mu):
+    def compute_derivatives(self, model, mu, spectra_list):
         """Return the differential of the a peak power spectrum component,
             with respect to log k for a single value of mu. Also add BAO peak broadening."""
         # i.e.
@@ -108,7 +109,16 @@ class Fisher:
 
         # Get P(k) for this μ
         pk = self._get_p_pk(model)
-        pk *= self._get_peak_smoothing(mu, self.zbin_index)
+
+        # Apply peak smoothing
+        for i, name in enumerate(spectra_list):
+            # if name == 'lya_lya':
+            #     pk[i] *= self._get_peak_smoothing(mu, self.zbin_index)
+            if 'lya' not in name:
+                pk[i] *= self._get_peak_smoothing(
+                    mu, self.zbin_index, reconstruction_factor=self._reconstruction_factor)
+            else:
+                pk[i] *= self._get_peak_smoothing(mu, self.zbin_index)
 
         # Compute derivative along k (with first entry zero padding)
         dmodel_dlk = np.zeros_like(pk)
@@ -136,7 +146,7 @@ class Fisher:
 
         return np.vstack(pk_list)
 
-    def _get_peak_smoothing(self, mu, zbin_index):
+    def _get_peak_smoothing(self, mu, zbin_index, reconstruction_factor=1):
         """Apply non-linear smoothing to BAO peak model"""
         kp = mu * self._power_spec.k
         kt = np.sqrt(1-mu**2) * self._power_spec.k
@@ -151,6 +161,9 @@ class Fisher:
         else:
             # scale with growth rate at z_ref
             f = self._cosmo.growth_rate
+
+        # Apply reconstruction factor to reduce non-linear damping
+        sig_nl_perp /= np.sqrt(reconstruction_factor)
 
         sig_nl_par = (1 + f) * sig_nl_perp  # Mpc/h
         return np.exp(-0.5 * ((sig_nl_par * kp)**2 + (sig_nl_perp * kt)**2))

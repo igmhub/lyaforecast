@@ -123,6 +123,8 @@ class Forecast:
             self._spectrograph, self._power_spec
         )
 
+        self.reconstruction_factor = self.config['tracer'].getfloat('reconstruction factor', 1.0)
+
         # init_end_time = time.time()
         # print(f"Forecast initialized in {init_end_time - init_start_time:.4f} seconds.")
 
@@ -171,7 +173,10 @@ class Forecast:
             num_modes_k = self._covariance.num_modes
 
             # initialise Fisher matrix computation class
-            fisher = Fisher(self._power_spec, self._cosmo, num_modes_k, zbin_index=iz)
+            fisher = Fisher(
+                self._power_spec, self._cosmo, num_modes_k, zbin_index=iz,
+                reconstruction_factor=self.reconstruction_factor
+            )
 
             # Update tracer bias if provided
             if self._tracer_biases is not None:
