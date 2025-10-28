@@ -7,8 +7,9 @@ class CosmoCamb:
     
     SPEED_LIGHT = 2.998e5 #km/s
     LYA_REST = 1215.67 #Angstroms
+    CIV_REST  = 1549.00
 
-    def __init__(self,ini,z_ref=None):
+    def __init__(self,ini,z_ref=None,absorption='lya'):
         """Setup cosmological model.
         Reference z is set in config with other parameters"""
 
@@ -34,6 +35,11 @@ class CosmoCamb:
 
         self.growth_rate = self.results.get_fsigma8()[0] / self.results.get_sigma8()[0]
 
+        if absorption=='civ':
+            self.LINE_REST = self.CIV_REST
+        else:
+            self.LINE_REST = self.LYA_REST
+
         
     def get_pk_lin(self,k,kmin=1.e-4,kmax=1.e1,npoints=1000):
         """Return linear power interpolator in units of h/Mpc, at zref"""
@@ -47,7 +53,7 @@ class CosmoCamb:
 
     def velocity_from_wavelength(self,z):
         """Conversion factor from lambda_obs to km/s, at redshift z."""
-        return self.SPEED_LIGHT / self.LYA_REST / (1+z) 
+        return self.SPEED_LIGHT / self.LINE_REST / (1+z) 
 
     def distance_from_wavlength(self,z):
         """Conversion factor from lambda_obs to Mpc/h, at redshift z."""

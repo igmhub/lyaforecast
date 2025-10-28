@@ -13,7 +13,7 @@ class PowerSpectrum:
         self._spectrograph = spectrograph
         self._growth_rate = self._cosmo.growth_rate
         #get analytical biases
-        self.bias = AnalyticBias(self._cosmo)
+        self.bias = AnalyticBias(config, self._cosmo)
 
         #power spectrum calculation details
         _properties = config['power spectrum']
@@ -52,7 +52,7 @@ class PowerSpectrum:
     
     def compute_p1d_kms(self,z,kp_kms,res_kms,pix_kms):
         """1D Lya power spectrum in observed coordinates,
-            smoothed with pixel width and resolution."""
+            smoothed with pixel width and resolution. Want to replace with an integral over 3D."""
         # get P1D before smoothing
         p1d_kms = self.compute_p1d_palanque2013(z,kp_kms)
         # smoothing (pixelization and resolution)
@@ -61,7 +61,7 @@ class PowerSpectrum:
 
         return p1d_kms
 
-    def compute_p3d_kms(self,z,kt_deg,kp_kms,res_kms,pix_kms,which='lya'):
+    def compute_p3d_kms(self,z,kt_deg,kp_kms,res_kms,pix_kms,which):
         """3D Lya power spectrum in observed coordinates. 
             Power smoothed with pixel width and resolution.
             If self._linear=True, it will ignore small scale correction."""
@@ -87,7 +87,7 @@ class PowerSpectrum:
 
         return p3d_degkms
 
-    def compute_p3d_hmpc(self,z,k_hmpc,mu,which='lya'):
+    def compute_p3d_hmpc(self,z,k_hmpc,mu,which):
         """3D power spectrum P_F(z,k,mu). 
         If linear=True, it will ignore small scale correction."""
         # get linear power at zrefs
@@ -100,7 +100,7 @@ class PowerSpectrum:
 
         return pk_zref * b
     
-    def compute_p3d_hmpc_smooth(self,z,k_hmpc,mu,pix_kms,res_kms,which='lya'):
+    def compute_p3d_hmpc_smooth(self,z,k_hmpc,mu,pix_kms,res_kms,which):
         """Smooth power spectrum (convert to k space then back.)"""
 
         #conversions

@@ -35,29 +35,29 @@ class Survey:
         
 
         # definition of forest (lrmin,lrmax)
-        self.lrmin = config['lya forest'].getfloat('min_rest_frame_lya')
-        self.lrmax = config['lya forest'].getfloat('max_rest_frame_lya')
+        self.lrmin = config['forest'].getfloat('min_rest_frame')
+        self.lrmax = config['forest'].getfloat('max_rest_frame')
 
         #number of exposures (for snr of forest)
-        self.num_exp = config['lya forest'].getfloat('num exposures')
+        self.num_exp = config['forest'].getfloat('num exposures')
 
         #pixel width (in angstroms or kms)
-        self.pix_kms = config['lya forest'].getfloat('pix_width_kms',None)
-        self.pix_ang = config['lya forest'].getfloat('pix_width_ang',None)
+        self.pix_kms = config['forest'].getfloat('pix_width_kms',None)
+        self.pix_ang = config['forest'].getfloat('pix_width_ang',None)
 
 
         #luminosity functions
-        self._lya_tracer_dzdz_file = get_file(config['lya forest'].get('dn dz'))
+        self._lya_tracer_dzdz_file = get_file(config['forest'].get('dn dz'))
         self._tracer_dzdz_file = get_file(config['tracer'].get('dn dz'))
 
         # tracers
-        self.lya_tracer = config['lya forest'].get('tracer', 'qso')
+        self.lya_tracer = config['forest'].get('tracer', 'qso')
         self.tracer = config['tracer'].get('tracer', None)
         if self.lya_tracer not in self.TRACER_OPTIONS or self.tracer not in self.TRACER_OPTIONS:
             raise ValueError(f'Please choose from accepted source tracers: {self.TRACER_OPTIONS}')
         
         # densities
-        self.lya_density = config['lya forest'].getfloat('target density')
+        self.lya_density = config['forest'].getfloat('target density')
         self.tracer_density = config['tracer'].getfloat('target density')
 
         # dn/dzdm

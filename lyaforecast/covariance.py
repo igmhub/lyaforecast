@@ -5,10 +5,11 @@ class Covariance:
     """Compute covariance matrix components for given tracers, for a given survey.
         Different redshift bins are treated as independent, and right
         now this object only deals with one redshift bin at a time."""
-    
+
+    ABSORPTION_OPTIONS = ['lya','civ']
     TRACER_OPTIONS = ['qso','lbg','lae']
     LYA_TRACER_OPTIONS = ['qso','lbg']
-    CROSS_TRACER_OPTIONS = ['lya_qso','lya_lbg','lya_lae']
+    CROSS_TRACER_OPTIONS = ['lya_qso','lya_lbg','lya_lae','civ_qso','civ_lbg','civ_lae']
 
     def __init__(self, config, cosmo, survey, spectrograph, power_spectrum):
 
@@ -91,7 +92,7 @@ class Covariance:
     def _get_z_mean(self):
         """ given wavelength range covered in bin, compute central redshift"""
 
-        return np.sqrt(self.lmin * self.lmax) / self._cosmo.LYA_REST - 1.0
+        return np.sqrt(self.lmin * self.lmax) / self._cosmo.LINE_REST - 1.0
     
     def _get_pix_kms(self):
         """Get pixel width in km/s, whether angstrom or km/s is provided"""
@@ -136,8 +137,8 @@ class Covariance:
     def _get_redshift_limits(self):
         """Redshift limits of bin, computed after calling class instance with lmin, lmax."""
 
-        self._zmin = self.lmin / self._cosmo.LYA_REST - 1
-        self._zmax = self.lmax / self._cosmo.LYA_REST - 1
+        self._zmin = self.lmin / self._cosmo.LINE_REST - 1
+        self._zmax = self.lmax / self._cosmo.LINE_REST - 1
 
     def _get_forest_length(self):
         """Length of Lya forest, in km/s"""
@@ -221,19 +222,19 @@ class Covariance:
         kp_kms = kp_hmpc / self._distance_to_velocity
         kt_deg = kt_hmpc * self._angle_to_distance
 
-        if tracer=='lya':
-            return self._compute_total_power_lya(kt_deg,kp_kms)
+        if tracer in self.ABSORPTION_OPTIONS:
+            return self._compute_total_power_forest(kt_deg,kp_kms,tracer)
         elif tracer in self.TRACER_OPTIONS:
-            return self._compute_total_power_tracer(k_hmpc,mu)
+            return self._compute_total_power_tracer(k_hmpc,mu,tracer)
         elif tracer in self.CROSS_TRACER_OPTIONS:
-            return self._compute_total_power_cross(kt_deg,kp_kms,k_hmpc,mu,tracer)
+            return self._compute_total_power_cross(k_hmpc,mu,tracer)
         else:
             raise ValueError('Invalid tracer name given for covariance computation:', tracer)
 
-    def _compute_total_power_lya(self,kt_deg,kp_kms):
+    def _compute_total_power_forest(self,kt_deg,kp_kms,tracer):
         """Sum of 3D Lya power, aliasing and effective noise power in mpc/h^3"""
 
-        p3d = self._power_spec.compute_p3d_kms(self._z_mean,kt_deg,kp_kms,self._res_kms,self._pix_kms,'lya')
+        p3d = self._power_spec.compute_p3d_kms(self._z_mean,kt_deg,kp_kms,self._res_kms,self._pix_kms,tracer)
         aliasing = (self._aliasing_weights[-1] * 
                     self._power_spec.compute_p1d_kms(self._z_mean,kp_kms,self._res_kms,self._pix_kms))
         noise = self._effective_noise_power[-1]
@@ -244,10 +245,10 @@ class Covariance:
 
         return total_power_mpc
     
-    def _compute_total_power_tracer(self,k_hmpc,mu):
+    def _compute_total_power_tracer(self,k_hmpc,mu,tracer):
         p3d = self._power_spec.compute_p3d_hmpc_smooth(self._z_mean, k_hmpc,
                                         mu, self._pix_kms, self._res_kms,
-                                        self._tracer) 
+                                        tracer) 
         #in 1/deg2km/s
         density_deg2kms = self._weights.get_n_tracer()[-1]
         #in 1/mpc/h^3
@@ -257,7 +258,7 @@ class Covariance:
 
         return total_power_mpc
     
-    def _compute_total_power_cross(self,kt_deg,kp_kms,k_hmpc,mu,tracer):
+    def _compute_total_power_cross(self,k_hmpc,mu,tracer):
         """Compute observed power from cross-correlation of forests and galaxies/quasars.
             Should be no noise contributions in theory."""
 
@@ -331,7 +332,7 @@ class Covariance:
         kt_deg = kt_hmpc * self._angle_to_distance
 
         # get total power in units of observed coordinates 
-        total_power_degkms = self.self._compute_total_power_lya(self._z_mean,kt_deg,kp_kms)
+        total_power_degkms = self.self._compute_total_power_forest(self._z_mean,kt_deg,kp_kms)
         # convert into units of (Mpc/h)^3
         total_power_hmpc = total_power_degkms * self._angle_to_distance**2 / self._distance_to_velocity
 
@@ -364,7 +365,7 @@ class Covariance:
         kp_kms = kp_hmpc / dkms_dmpch
         kt_deg = kt_hmpc * dhmpc_ddeg
                 
-        total_power_lya_degkms = self.self._compute_total_power_lya(z,kt_deg,kp_kms)
+        total_power_lya_degkms = self.self._compute_total_power_forest(z,kt_deg,kp_kms)
         noise_lya = total_power_lya_degkms - self._power_spec.compute_p3d_kms(z,kt_deg,kp_kms,
                                                                               self._res_kms
                                                                               ,self._pix_kms,'lya')
@@ -443,7 +444,7 @@ class Covariance:
         kt_deg = kt_hmpc * dhmpc_ddeg
 
         #lya auto
-        total_power_lya = self.self._compute_total_power_lya(z,kt_deg,kp_kms)
+        total_power_lya = self.self._compute_total_power_forest(z,kt_deg,kp_kms)
         total_power_lya_hmpc = total_power_lya * dhmpc_ddeg**2 / dkms_dhmpc
 
         #cross

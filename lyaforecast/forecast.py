@@ -20,7 +20,7 @@ from lyaforecast import (
 
 @dataclass
 class FlagStore:
-    lya_auto: bool
+    forest_auto: bool
     cross: bool
     tracer_auto: bool
 
@@ -80,22 +80,25 @@ class Forecast:
 
         # which power spectra to forecast
         self.flags = FlagStore(
-            lya_auto=self.config['control'].getboolean('lya auto'),
+            forest_auto=self.config['control'].getboolean('forest auto'),
             cross=self.config['control'].getboolean('cross'),
             tracer_auto=self.config['control'].getboolean('tracer auto')
         )
 
         # tracer types
-        self._lya_tracer = self.config['lya forest'].get('tracer')
+        self._absorption_line = self.config['forest'].get('absorption')
+        self._forest_tracer = self.config['forest'].get('tracer')
         self._tracer = self.config['tracer'].get('tracer')
-        self._cross_tracer = 'lya_' + self._tracer
+        self._cross_tracer = f'{self._absorption_line}_' + self._tracer
+
 
         #not used currently - still unsure what to do.
         self._add_spectum_names()
   
         #initialise cosmology
         self._cosmo = CosmoCamb(self.config['cosmo'].get('filename'),
-                                self.config['cosmo'].getfloat('z_ref', None))
+                                self.config['cosmo'].getfloat('z_ref', None),
+                                self.config['forest'].get('absorption','lya'))
 
         #load survey instance
         self._survey = Survey(self.config)
@@ -145,8 +148,8 @@ class Forecast:
                         f"{self._survey.z_bin_edges[1,iz]}], bin centre = {zc}")
             
             # observed wavelength range from redshift limits
-            lmin = self._cosmo.LYA_REST * (1 + self._survey.z_bin_edges[0,iz])
-            lmax = self._cosmo.LYA_REST * (1 + self._survey.z_bin_edges[1,iz])
+            lmin = self._cosmo.LINE_REST * (1 + self._survey.z_bin_edges[0,iz])
+            lmax = self._cosmo.LINE_REST * (1 + self._survey.z_bin_edges[1,iz])
 
             #call function, setting bin width
             self._covariance(lmin,lmax)
@@ -164,7 +167,7 @@ class Forecast:
             # Resulting shape will be (len(mu), len(k))
             p3d_cache = {}
             #TEMPORARY
-            corr_names_temp = ['lya', self._cross_tracer, self._tracer]
+            corr_names_temp = [self._absorption_line, self._cross_tracer, self._tracer]
             corr_names_cut = [c for j, c in enumerate(corr_names_temp)
                    if self.flags.include_tracer[j]]
                 
@@ -218,9 +221,10 @@ class Forecast:
         sigma_at_full = 1./np.sqrt(np.sum(1./sigma_at**2))
         sigma_ap_full = 1./np.sqrt(np.sum(1./sigma_ap**2))
 
-
         self.logger.info(fr'Full: at ({self.results_name})={sigma_at_full}'
                 fr', ap ({self.results_name})={sigma_ap_full}')
+        
+        self._print_a_iso(sigma_ap_full,sigma_at_full,corr_coef_z)
        
         data = {}
         data["redshifts"] = self._survey.z_bin_centres
@@ -229,12 +233,16 @@ class Forecast:
 
     def _add_spectum_names(self):
         #needs to be edited for more than one config
-        if self.flags.lya_auto:
-            lya_auto_name = f'lya({self._lya_tracer})_lya({self._lya_tracer})'
-            self.spectrum_names['lya'] = lya_auto_name
+        if self.flags.forest_auto:
+            forest_auto_name = f'{self._absorption_line}({self._forest_tracer})_{self._absorption_line}({self._forest_tracer})'
+            self.spectrum_names[self._absorption_line] = forest_auto_name
         if self.flags.cross:
-            cross_name = f'lya({self._lya_tracer})_{self._tracer}'
+            cross_name = f'{self._absorption_line}({self._forest_tracer})_{self._tracer}'
             self.spectrum_names['cross'] = cross_name
         if self.flags.tracer_auto:
             tracer_auto_name = f'{self._tracer}_{self._tracer}'
             self.spectrum_names['tracer auto'] = tracer_auto_name
+
+    def _print_a_iso(self,sap,sat,correff):
+        saiso = (1/3) * np.sqrt(4*(sat**2) + (sap)**2 + 4*correff*sat*sap)
+        print('alpha_iso = ', saiso)
