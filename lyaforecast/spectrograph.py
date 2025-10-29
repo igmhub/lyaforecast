@@ -32,7 +32,7 @@ class Spectrograph:
         """Read one of the files with SNR as a function of zq and lambda, given magnitude, band, exptime"""
         #set exposure time, currently fixed at 4000.
         #this is not particularly flexible
-        fname = self._snr_file_dir.joinpath(f'sn-spec-lya-20180907-{self._band}{mag}-t{str(self._file_exp_time)}-nexp{self._file_num_exp}.dat')
+        fname = self._snr_file_dir.joinpath(f'sn-spec-lya-20251028-{self._band}{mag}-t{str(self._file_exp_time)}-nexp{self._file_num_exp}.dat')
 
         print("reading magnitude {} in file {}".format(mag,fname))
         fname = check_file(fname)
@@ -57,7 +57,7 @@ class Spectrograph:
         # signal to noise per pixel in file
         self.SN = None
         Nm=len(self.mags)
-        for i in range(Nm): 
+        for i in range(Nm):
             m = self.mags[i]
             l_A,SN = self._read_file(m)
             if i == 0:
@@ -67,15 +67,15 @@ class Spectrograph:
                 Nl=len(self.lobs_A)
                 self.SN = np.empty((Nm,Nz,Nl))
             self.SN[i,:,:] = SN.transpose()
-    
+
         # setup interpolator
         self.SN = RegularGridInterpolator((self.mags,self.zq,self.lobs_A),self.SN)
         return True
-    
+
     def _setup_desi_spectro(self):
         """Setup objects from file(s). Files were generated using
                 desihub/desimodel/bin/desi_quicklya.py"""
-        
+
         print('Setting up DESI spectrograph')
 
         self._read_desi_file_header()
@@ -92,11 +92,11 @@ class Spectrograph:
 
                 self._snr_mat = np.zeros((num_m,num_z,num_wave))
             self._snr_mat[i,:,:] = pixel_snr_mag.T
-            
+
         #smooth rather noisy matrix
         sigma_smooth = 10
         self._snr_mat = gaussian_filter1d(self._snr_mat,sigma_smooth,axis=2)
-            
+
 
         # setup interpolator
         self._snr_interp = RegularGridInterpolator((self._magnitudes,self._zq,self._lambda_obs_m),self._snr_mat,bounds_error=False, fill_value=None)
@@ -114,7 +114,7 @@ class Spectrograph:
         #
         # Wave SN(z=2.0) SN(z=2.25) SN(z=2.5) SN(z=2.75) SN(z=3.0) SN(z=3.25) SN(z=3.5) SN(z=3.75) SN(z=4.0) SN(z=4.25) SN(z=4.5) SN(z=4.75)
         """
-                
+
         # find range of magnitudes
         magnitudes = []
         # quasar redshifts in file
@@ -123,7 +123,7 @@ class Spectrograph:
         for filename in self._filenames:
             head=dict()
             file=open(filename)
-            
+
             for line in file.readlines():
                 if line[0] != "#" : continue
                 line=line.replace("#","").strip()
@@ -172,15 +172,15 @@ class Spectrograph:
     def range_zq(self):
         """Return range of quasar redshifts from file"""
         return self.zq[0],self.zq[-1]
-  
+
     def range_mag(self):
         """Return range of magnitudes from file"""
         return self.mags[0],self.mags[-1]
-  
+
     def range_lobs_A(self):
         """Return range of wavelengths from file"""
         return self.lobs_A[0],self.lobs_A[-1]
-  
+
     def get_pixel_rms_noise(self,rmag,zq,lam_obs,pix_width,num_exp=4):
         """Normalized noise RMS as a function of observed magnitude, quasar
           redshift, pixel wavelength (in A), and pixel width (in A).
@@ -188,16 +188,16 @@ class Spectrograph:
           brighter quasars will have less normalized noise.
           In other words, this is inverse of signal to noise.
           If S/N = 0, or not covered, return very large number."""
-        large_noise=1e10  
-        if rmag > self._magnitudes[-1]: 
+        large_noise=1e10
+        if rmag > self._magnitudes[-1]:
             #print('WARNING: extrapolating beyond stored magnitude information')
             if self._survey.lya_tracer!='lbg':
                 #print(f'mag {rmag} too faint, returning large noise')
-                return large_noise        
-        if zq > self._zq[-1] or zq < self._zq[0]: 
+                return large_noise
+        if zq > self._zq[-1] or zq < self._zq[0]:
             print(f'zqso {zq} out of range, returning large noise')
             return large_noise
-        
+
         if (self._lambda_obs_m[-1] < lam_obs) or (lam_obs < self._lambda_obs_m[0]):
             print('Forest wavelength out of bounds, returning large noise')
             return large_noise
@@ -232,6 +232,6 @@ class Spectrograph:
         gauss_kernel = np.exp(-0.5 * k_kms**2 * res_kms**2)
 
         return pixel_kernel * gauss_kernel
-    
+
     def get_snr_per_ang(self,mag,zq,lam):
         return self._snr_interp([mag,zq,lam])
