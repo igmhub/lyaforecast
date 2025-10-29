@@ -190,10 +190,7 @@ class Spectrograph:
           If S/N = 0, or not covered, return very large number."""
         large_noise=1e10
         if rmag > self._magnitudes[-1]:
-            #print('WARNING: extrapolating beyond stored magnitude information')
-            if self._survey.lya_tracer!='lbg':
-                #print(f'mag {rmag} too faint, returning large noise')
-                return large_noise
+            return large_noise
         if zq > self._zq[-1] or zq < self._zq[0]:
             print(f'zqso {zq} out of range, returning large noise')
             return large_noise
@@ -215,15 +212,6 @@ class Spectrograph:
         snr = snr_per_exp * np.sqrt(num_exp / self._file_num_exp)
         # prevent division by zero
         snr = np.fmax(snr, 1 / large_noise)
-
-        if self._survey.lya_tracer == 'lbg':
-            # for LBG hardcoded SNR = 0.35 for pixel of 1A (obs. frame) for rmag=24 for 4h observations
-            # this is derived from Fig 2 of https://arxiv.org/pdf/2507.21852 (Herrera-Alcantar et al., 2025)
-            snr_per_ang = 0.35 * 10**((24-rmag)/2.5)
-            # we consider that 1 exposure is 1000s, so that 4h = 14.4 exposures!
-            snr = snr_per_ang * np.sqrt(pix_width) * np.sqrt(num_exp / 14.4)
-            # prevent division by zero
-            snr = np.fmax(snr, 1 / large_noise)
 
         return 1 / snr
 
