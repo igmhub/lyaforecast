@@ -2,7 +2,7 @@
 import numpy as np 
 
 class Weights:
-    OPTIONS = ['lya','qso']
+    OPTIONS = ['lya','civ']
     def __init__(self,config,survey,cosmo,powerspec,spectrograph,
                  forest_length,pixel_length,resolution,lambda_mean,z_bin,z_qso,
                  zmin, zmax):
@@ -55,20 +55,15 @@ class Weights:
                                                       self._res_kms,self._pix_kms)
        
         # compute first weights using only 1D and noise variance
-        if which=='lya':
-            self._compute_weights = self._compute_weights_lya
-            weights = self._initialise_weights_lya()
-        elif which=='qso':
-            self._compute_weights = self._compute_weights_qso
-            weights = self._initialise_weights_qso()
-    
+        weights = self._initialise_weights()
+
         num_iter = 3
         for i in range(num_iter):
             weights = self._compute_weights(weights)
 
         return weights
     
-    def _initialise_weights_lya(self):
+    def _initialise_weights(self):
         """Compute initial weights as a function of magnitude, using only
             P1D and noise variance."""
         # noise pixel variance as a function of magnitude (dimensionless)
@@ -79,7 +74,7 @@ class Weights:
 
         return weights
     
-    def _compute_weights_lya(self,weights):
+    def _compute_weights(self,weights):
         """Compute new weights as a function of magnitude, using P3D.
             This version of computing the weights is closer to the one
             described in McDonald & Eisenstein (2007)."""
@@ -113,12 +108,7 @@ class Weights:
     def _get_dn_dkmsdm(self,z,m,which='lya'):
 
         dkms_dz = self._cosmo.SPEED_LIGHT / (1 + z)
-        # if self._survey.desi_sv:
-        #     # quasar number density
-        #     dn_degdz = self._survey.get_qso_lum_func(z) 
-        #     dndm_degdz = dn_degdz / (m[1]-m[0])
-        # else:
-        # number density
+
         dndm_degdzdm = self._survey.get_dn_dzdm(z,m,which)
             
         dn_degkmsdm = dndm_degdzdm / dkms_dz

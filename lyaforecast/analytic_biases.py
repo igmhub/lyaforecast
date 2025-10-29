@@ -46,7 +46,8 @@ class AnalyticBias:
     def _get_beta_rsd(self,z,which):
         """Retrieve linear RSD anisotropy parameter as a function of redshift.
                 Input values stored in config files."""
-        beta = self._biasing.getfloat('', None)
+        beta = self._biasing.getfloat(which + ' rsd', None)
+        
         if beta is None:
             #print('Beta RSD not given, estimating assuming beta = f / b.')
             beta = self._growth_rate/self._get_density_bias(z,which)

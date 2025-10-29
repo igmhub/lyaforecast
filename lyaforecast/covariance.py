@@ -31,6 +31,8 @@ class Covariance:
         self._tracer = self._config['tracer'].get('tracer')
         if self._tracer not in self.TRACER_OPTIONS:
             raise ValueError(f'Please choose from accepted tracers: {self.TRACER_OPTIONS}')
+        
+        self._absorption_type = self._config['forest'].get('absorption')
 
         # These will be dependent on redshift bins, 
         # which are passed during foreacast run (for now).
@@ -194,13 +196,13 @@ class Covariance:
                                self._z_mean,self._zq,self._zmin,self._zmax)
 
         # lyman-alpha weights
-        w_lya = self._weights.compute_weights()
-        self._w_lya = w_lya
+        w_f = self._weights.compute_weights(self._absorption_type)
+        self._w_f = w_f
 
         # given weights, compute integrals in McDonald & Eisenstein (2007)
-        int_1 = self._weights.compute_int_1(w_lya)
-        int_2 = self._weights.compute_int_2(w_lya)
-        int_3 = self._weights.compute_int_3(w_lya)
+        int_1 = self._weights.compute_int_1(w_f)
+        int_2 = self._weights.compute_int_2(w_f)
+        int_3 = self._weights.compute_int_3(w_f)
 
         # Pw2D in McDonald & Eisenstein (2007)
         self._aliasing_weights = int_2 / (int_1**2 * forest_length)
@@ -341,7 +343,7 @@ class Covariance:
         num_modes = self._survey_volume_mpc * k_hmpc**2 * self._power_spec.dk * self._power_spec.dmu / (2 * np.pi**2)
         power_variance = 2 * total_power_hmpc**2 / num_modes
         
-        # self._w_lya = self._weights._p3d_w / (self._weights._p3d_w + power_variance)
+        # self._w_f = self._weights._p3d_w / (self._weights._p3d_w + power_variance)
 
         #If not per magnitude, return power var for mmax only. 
         # Otherwise as a function of m input.

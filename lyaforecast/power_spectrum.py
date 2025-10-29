@@ -65,6 +65,7 @@ class PowerSpectrum:
         """3D Lya power spectrum in observed coordinates. 
             Power smoothed with pixel width and resolution.
             If self._linear=True, it will ignore small scale correction."""
+
         # transform km/s to Mpc/h
         dkms_dhmpc = self._cosmo.velocity_from_distance(z)
         kp_hmpc = kp_kms * dkms_dhmpc
@@ -77,6 +78,7 @@ class PowerSpectrum:
 
         # compute power in Mpc/h (from power_spectrum module)
         p3d_hmpc = self.compute_p3d_hmpc(z,k_hmpc,mu,which)
+
         # convert power to observed units
         p3d_degkms = p3d_hmpc * dkms_dhmpc / dhmpc_ddeg**2
         # convert resolution to kms
