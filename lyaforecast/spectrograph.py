@@ -217,9 +217,13 @@ class Spectrograph:
         snr = np.fmax(snr, 1 / large_noise)
 
         if self._survey.lya_tracer == 'lbg':
-            # for LBG hardcoded SNR = 0.35 for pixel of 1A (obs. frame)
-            snr_per_ang = 0.35
-            snr = snr_per_ang * np.sqrt(pix_width)
+            # for LBG hardcoded SNR = 0.35 for pixel of 1A (obs. frame) for rmag=24 for 4h observations
+            # this is derived from Fig 2 of https://arxiv.org/pdf/2507.21852 (Herrera-Alcantar et al., 2025)
+            snr_per_ang = 0.35 * 10**((24-rmag)/2.5)
+            # we consider that 1 exposure is 1000s, so that 4h = 14.4 exposures!
+            snr = snr_per_ang * np.sqrt(pix_width) * np.sqrt(num_exp / 14.4)
+            # prevent division by zero
+            snr = np.fmax(snr, 1 / large_noise)
 
         return 1 / snr
 
