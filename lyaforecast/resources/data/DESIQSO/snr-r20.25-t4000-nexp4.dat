@@ -1,6 +1,6 @@
-# using desi_quicklya.py --ab-magnitude r=24.5 --total-exptime 4000 --nexp 4 --prefix sn-spec-lya-20251028
+# using desi_quicklya.py --ab-magnitude r=24.5 --total-exptime 4000 --nexp 4 --prefix /global/common/software/desi/users/jguy/lyaforecast/lyaforecast/resources/data/DESIQSO/snr
 # run by jguy
-# on 2025-10-28
+# on 2025-10-29
 # Lyman-alpha forest S/N per Ang for mean quasar with mean forest
 # INFILE= /global/common/software/desi/perlmutter/desiconda/20240425-2.2.0/code/desimodel/0.19.3/data/spectra/spec-lya.dat
 # BAND= r
