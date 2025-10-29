@@ -32,7 +32,7 @@ class Spectrograph:
         """Read one of the files with SNR as a function of zq and lambda, given magnitude, band, exptime"""
         #set exposure time, currently fixed at 4000.
         #this is not particularly flexible
-        fname = self._snr_file_dir.joinpath(f'sn-spec-lya-20251028-{self._band}{mag}-t{str(self._file_exp_time)}-nexp{self._file_num_exp}.dat')
+        fname = self._snr_file_dir.joinpath(f'snr-{self._band}{mag}-t{str(self._file_exp_time)}-nexp{self._file_num_exp}.dat')
 
         print("reading magnitude {} in file {}".format(mag,fname))
         fname = check_file(fname)
