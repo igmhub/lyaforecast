@@ -217,7 +217,9 @@ class Spectrograph:
         snr = np.fmax(snr, 1 / large_noise)
 
         if self._survey.lya_tracer == 'lbg':
-            snr = 0.35
+            # for LBG hardcoded SNR = 0.35 for pixel of 1A (obs. frame)
+            snr_per_ang = 0.35
+            snr = snr_per_ang * np.sqrt(pix_width)
 
         return 1 / snr
 
