@@ -104,7 +104,7 @@ class AnalyticBias:
         else:
             return 1
 
-    def compute_bias(self, z, k_hmpc, mu, linear=True, which='lya'):
+    def compute_bias(self, z, k_hmpc, mu, corr, linear=True):
         """Analytic formula for scale-dependent bias of Lyman alpha P3D(z,k,mu),
              including Kaiser and small scale correction.
             Basically, it retursn P_F(k,mu) / P_lin(k,mu)
@@ -112,43 +112,57 @@ class AnalyticBias:
             Values are cosmology dependent, but we ignore it here.
             If linear=True, return only Kaiser.
             Wavenumbers in h/Mpc. """
+        tracers = corr.split('_')
+        assert len(tracers) == 2, 'corr must be of the form tracer1_tracer2'
 
-        tracers = which.split('_')
-
-        if self._tracer_bias is not None:
-            kaiser_lya = None
-            kaiser_tracer = None
-            for t in tracers:
-                if t == 'lya':
-                    kaiser_lya = self._get_density_bias(z, t)
-                    kaiser_lya *= (1 + self._get_beta_rsd(z, t) * mu**2)
-                else:
-                    growth_rate = self._cosmo.growth_rate_zbins[self._zbin_index]
-                    kaiser_tracer = self._tracer_bias * (
-                        1 + growth_rate/self._tracer_bias * mu**2)
-
-            if kaiser_tracer is None:
-                kaiser = kaiser_lya**2
-            elif kaiser_lya is None:
-                kaiser = kaiser_tracer**2
+        kaiser = 1
+        for i, t in enumerate(tracers):
+            if 'lya' in t:
+                kaiser *= self._get_density_bias(z, 'lya')
+                kaiser *= (1 + self._get_beta_rsd(z, 'lya') * mu**2)
+            elif self._tracer_bias is not None and t in self._tracer_bias:
+                growth_rate = self._cosmo.growth_rate_zbins[self._zbin_index]
+                kaiser *= self._tracer_bias[t] * (
+                        1 + growth_rate/self._tracer_bias[t] * mu**2)
             else:
-                kaiser = kaiser_lya * kaiser_tracer
+                kaiser *= self._get_density_bias(z, t) * (1 + self._get_beta_rsd(z, t) * mu**2)
 
-            return kaiser
+        return kaiser
 
-        if len(tracers) > 1:
-            b = self._get_density_bias(z, tracers[0]) * self._get_density_bias(z, tracers[1])
-            rsd = (1 + self._get_beta_rsd(z, tracers[0]) * mu**2) * (1 + self._get_beta_rsd(z, tracers[1]) * mu**2)
-            kaiser = b * rsd
-        else:
-            b = self._get_density_bias(z, which)**2
-            rsd = (1 + self._get_beta_rsd(z, which) * mu**2)**2
-            kaiser = b * rsd
-        if linear:
-            # currently only option
-            return kaiser
-        else:
-            return kaiser * self._small_scale_correction(k_hmpc, mu, which)
+        # if self._tracer_bias is not None:
+        #     kaiser_lya = None
+        #     kaiser_tracer = None
+        #     for t in tracers:
+        #         if t == 'lya':
+        #             kaiser_lya = self._get_density_bias(z, t)
+        #             kaiser_lya *= (1 + self._get_beta_rsd(z, t) * mu**2)
+        #         else:
+        #             growth_rate = self._cosmo.growth_rate_zbins[self._zbin_index]
+        #             kaiser_tracer = self._tracer_bias * (
+        #                 1 + growth_rate/self._tracer_bias * mu**2)
+
+        #     if kaiser_tracer is None:
+        #         kaiser = kaiser_lya**2
+        #     elif kaiser_lya is None:
+        #         kaiser = kaiser_tracer**2
+        #     else:
+        #         kaiser = kaiser_lya * kaiser_tracer
+
+        #     return kaiser
+
+        # if len(tracers) > 1:
+        #     b = self._get_density_bias(z, tracers[0]) * self._get_density_bias(z, tracers[1])
+        #     rsd = (1 + self._get_beta_rsd(z, tracers[0]) * mu**2) * (1 + self._get_beta_rsd(z, tracers[1]) * mu**2)
+        #     kaiser = b * rsd
+        # else:
+        #     b = self._get_density_bias(z, which)**2
+        #     rsd = (1 + self._get_beta_rsd(z, which) * mu**2)**2
+        #     kaiser = b * rsd
+        # if linear:
+        #     # currently only option
+        #     return kaiser
+        # else:
+        #     return kaiser * self._small_scale_correction(k_hmpc, mu, which)
 
     def set_tracer_bias(self, bias, zbin_index):
         self._tracer_bias = bias

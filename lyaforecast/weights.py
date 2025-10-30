@@ -3,15 +3,17 @@ import numpy as np
 
 
 class Weights:
-    OPTIONS = ['lya', 'qso']
+    # OPTIONS = ['lya', 'qso']
 
     def __init__(
-        self, config, survey, cosmo, powerspec, spectrograph,
-        forest_length, pixel_length, resolution, lambda_mean, z_bin, z_qso, zmin, zmax
+        self, config, maglist, cosmo, powerspec, spectrograph,
+        forest_length, pixel_length, resolution, lambda_mean, z_bin, z_qso, zmin, zmax,
+        lya_tracer=None, discrete_tracer=None
     ):
         self.weights = None
         self._config = config
-        self._survey = survey
+        self.maglist = maglist
+
         self._cosmo = cosmo
         self._spectrograph = spectrograph
         self._powerspec = powerspec
@@ -23,6 +25,8 @@ class Weights:
         self._zq = z_qso
         self._zmin = zmin
         self._zmax = zmax
+        self._lya_tracer = lya_tracer
+        self._discrete_tracer = discrete_tracer
 
         # get k values to evaluate p_w ,z,kt_deg,kp_kms,res_kms,pix_kms,whic
         self._get_eval_mode()
@@ -40,32 +44,32 @@ class Weights:
         else:
             raise ValueError('measurement type must be chosen from:', ACCEPTED_OPTIONS)
 
-    def compute_weights(self, which='lya'):
-        """Compute weights as a function of magnitude. 
-            We do it iteratively since the weights depend on I1, and 
+    def compute_weights(self, corr):
+        """Compute weights as a function of magnitude.
+            We do it iteratively since the weights depend on I1, and
             I1 depends on the weights."""
 
         # Tracer is internally set, but just for posterity.
-        assert which in self.OPTIONS, 'Tracer option invalid'
+        # assert which in self.OPTIONS, 'Tracer option invalid'
 
         # pre-compute power spectra for weighting
         self._p3d_w = self._powerspec.compute_p3d_kms_smooth(
-            self._z_bin, self.kt_w_deg, self.kp_w_kms, self._res_kms, self._pix_kms, which)
+            self._z_bin, self.kt_w_deg, self.kp_w_kms, self._res_kms, self._pix_kms, corr)
 
         self._p1d_w = self._powerspec.compute_p1d_kms(
-            self._z_bin, self.kp_w_kms, self._res_kms, self._pix_kms)
+            self._z_bin, self.kp_w_kms, self._res_kms, self._pix_kms, corr)
 
         # compute first weights using only 1D and noise variance
-        if which == 'lya':
-            self._compute_weights = self._compute_weights_lya
-            weights = self._initialise_weights_lya()
-        elif which == 'qso':
-            self._compute_weights = self._compute_weights_qso
-            weights = self._initialise_weights_qso()
+        # if which == 'lya_lya':
+        weights = self._initialise_weights_lya()
+        # self._compute_weights = self._compute_weights_lya
+        # elif which == 'qso':
+        #     self._compute_weights = self._compute_weights_qso
+        #     weights = self._initialise_weights_qso()
 
         num_iter = 3
         for i in range(num_iter):
-            weights = self._compute_weights(weights)
+            weights = self._compute_weights_lya(weights)
 
         return weights
 
@@ -101,7 +105,7 @@ class Weights:
     def _initialise_weights_qso(self):
         """Compute initial quasar weights as a function of magnitude."""
 
-        return np.ones_like(self._survey.maglist)
+        return np.ones_like(self.maglist)
 
     # We're not computing an effective density, just n_3d, but easier to do it in this module.
     def _compute_weights_qso(self, weights):
@@ -111,15 +115,11 @@ class Weights:
 
         return weights
 
-    def _get_dn_dkmsdm(self, z, m, which='lya'):
+    def _get_dn_dkmsdm(self, z, m, tracer):
         dkms_dz = self._cosmo.SPEED_LIGHT / (1 + z)
-        # if self._survey.desi_sv:
-        #     # quasar number density
-        #     dn_degdz = self._survey.get_qso_lum_func(z)
-        #     dndm_degdz = dn_degdz / (m[1]-m[0])
-        # else:
+
         # number density
-        dndm_degdzdm = self._survey.get_dn_dzdm(z, m, which)
+        dndm_degdzdm = tracer.get_dn_dzdm(z, m)
 
         dn_degkmsdm = dndm_degdzdm / dkms_dz
 
@@ -130,9 +130,10 @@ class Weights:
             It represents an effective density of pixels, and it depends
             on the current value of the weights, that in turn depend on I1.
             We solve these iteratively (converges very fast)."""
+        assert self._lya_tracer is not None, "Lya tracer must be set to compute I1"
         # quasar number density
-        dn_dmdegkms = self._get_dn_dkmsdm(self._zq, self._survey.maglist, which='lya')
-        dm = self._survey.maglist[1] - self._survey.maglist[0]
+        dn_dmdegkms = self._get_dn_dkmsdm(self._zq, self.maglist, self._lya_tracer)
+        dm = self.maglist[1] - self.maglist[0]
         integrand = dn_dmdegkms * weights * dm
         # weighted density of quasars
 
@@ -144,9 +145,10 @@ class Weights:
     def compute_int_2(self, weights):
         """Integral 2 in McDonald & Eisenstein (2007).
             It is used to set the level of aliasing."""
+        assert self._lya_tracer is not None, "Lya tracer must be set to compute I2"
         # quasar number density
-        dn_dmdegkms = self._get_dn_dkmsdm(self._zq, self._survey.maglist, which='lya')
-        dm = self._survey.maglist[1] - self._survey.maglist[0]
+        dn_dmdegkms = self._get_dn_dkmsdm(self._zq, self.maglist, self._lya_tracer)
+        dm = self.maglist[1] - self.maglist[0]
         integrand = dn_dmdegkms * weights**2 * dm
         int_2 = np.cumsum(integrand)
 
@@ -155,15 +157,12 @@ class Weights:
     def compute_int_3(self, weights):
         """Integral 3 in McDonald & Eisenstein (2007).
             It is used to set the effective noise power."""
+        assert self._lya_tracer is not None, "Lya tracer must be set to compute I3"
         # pixel noise variance (dimensionless)
         pixel_var = self._get_pix_var_m()
         # quasar number density
-        dn_dmdegkms = self._get_dn_dkmsdm(self._zq, self._survey.maglist, which='lya')
-        dm = self._survey.maglist[1] - self._survey.maglist[0]
-
-        # when we don't have dn/dz with magnitude
-        # if self._survey.desi_sv:
-        #     pixel_var = np.mean(pixel_var)
+        dn_dmdegkms = self._get_dn_dkmsdm(self._zq, self.maglist, self._lya_tracer)
+        dm = self.maglist[1] - self.maglist[0]
 
         integrand = dn_dmdegkms * weights**2 * pixel_var * dm
         int_3 = np.cumsum(integrand)
@@ -181,37 +180,36 @@ class Weights:
 
         return np_eff
 
-    def get_n_tracer(self):
+    def get_n_tracer(self, tracer):
         """Compute tracer density as a function of maximum magnitude"""
 
-        mags = self._survey.maglist
-        dn_dkmsdm = self._get_dn_dkmsdm(self._z_bin, self._survey.maglist, which='tracer')
+        mags = self.maglist
+        dn_dkmsdm = self._get_dn_dkmsdm(self._z_bin, self.maglist, tracer)
         dm = mags[1] - mags[0]
         dn_dkms = np.cumsum(dn_dkmsdm * dm)
 
         return dn_dkms
 
-    def compute_tracer_weights(self, tracer):
+    def compute_tracer_weights(self, corr, tracer):
         p3d = self._powerspec.compute_p3d_kms_smooth(
-            self._z_bin, self.kt_w_deg, self.kp_w_kms, self._res_kms, self._pix_kms, tracer)
+            self._z_bin, self.kt_w_deg, self.kp_w_kms, self._res_kms, self._pix_kms, corr)
 
-        p_n = 1 / self.get_n_tracer()
-
+        p_n = 1 / self.get_n_tracer(tracer)
         weights = p3d / (p3d + p_n)
 
         return weights
 
     def _get_pix_var_m(self):
         """Noise pixel variance as a function of magnitude (dimensionless)"""
-
+        assert self._lya_tracer is not None, "Lya tracer must be set to compute pixel variance"
         # pixel width in angstroms
         pix_ang = self._pix_kms / self._cosmo.velocity_from_wavelength(self._z_bin)
 
         # noise rms per pixel
-        noise_rms = np.zeros_like(self._survey.maglist)
-        for i, m in enumerate(self._survey.maglist):
+        noise_rms = np.zeros_like(self.maglist)
+        for i, m in enumerate(self.maglist):
             noise_rms[i] = self._spectrograph.get_pixel_rms_noise(
-                m, self._zq, self._lambda_mean, pix_ang, self._survey.num_exp)
+                m, self._zq, self._lambda_mean, pix_ang, self._lya_tracer.num_exp)
         noise_var = noise_rms**2
 
         return noise_var

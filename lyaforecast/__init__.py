@@ -13,3 +13,4 @@ from lyaforecast.power_spectrum import PowerSpectrum
 from lyaforecast.fisher import Fisher
 from lyaforecast.utils import get_file, setup_logger
 from lyaforecast.forecast import Forecast
+from lyaforecast.tracer import Tracer

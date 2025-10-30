@@ -153,6 +153,7 @@ class Forecast:
         sigma_ap = np.zeros(self._survey.num_z_bins)
         corr_coef = np.zeros(self._survey.num_z_bins)
 
+        fisher_input = {}
         for iz, zc in enumerate(self._survey.z_bin_centres):
             self.logger.info(
                 f"z bin = [{self._survey.z_bin_edges[0,iz]}-"
@@ -231,6 +232,14 @@ class Forecast:
             fisher_mat = fisher.compute_fisher(
                 p3d_cache, p3d_obs_cache, corr_names_cut)
 
+            fisher_input[iz] = {
+                'fisher_matrix': fisher_mat,
+                'p3d_cache': p3d_cache,
+                'num_modes_k': num_modes_k,
+                'p3d_obs_cache': p3d_obs_cache,
+                'corr_names_cut': corr_names_cut,
+            }
+
             if self.flags.is_3x2pt:
                 self.results_name = '3x2pt'
             else:
@@ -259,9 +268,10 @@ class Forecast:
         data["corr_coef"] = corr_coef
         data["sigma_at_full"] = sigma_at_full
         data["sigma_ap_full"] = sigma_ap_full
+        # data
         self.data = data
 
-        return data
+        return data, fisher_input
 
     def _add_spectum_names(self):
         # needs to be edited for more than one config

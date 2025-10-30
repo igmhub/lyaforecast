@@ -173,7 +173,7 @@ class Fisher:
         """Print BAO results from Fisher matrix"""
         cov = np.linalg.inv(fisher_matrix)
         sigma_dh = np.sqrt(cov[0, 0])
-        sigma_da = np.sqrt(cov[1, 1])    
+        sigma_da = np.sqrt(cov[1, 1])
         corr_coef = cov[0, 1]/np.sqrt(cov[0, 0]*cov[1, 1])
 
         print(f"ap ({which})={sigma_dh}, at ({which})={sigma_da},corr={corr_coef}")

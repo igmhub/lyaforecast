@@ -1,76 +1,86 @@
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import gaussian_filter1d
-from lyaforecast.utils import get_dir, get_file, check_file
+from lyaforecast.utils import get_dir, check_file
 import sys
+
 
 class Spectrograph:
     """Class to describe a given spectrograph, and return noise estimates.
         Should be pythonized, right now it's really inefficient."""
+    _snr_file_dir_other = None
+    _filenames_other = None
 
-    def __init__(self, config, survey):
+    def __init__(self, config, survey, tracer, other_tracer=None):
         """Construct object, probably from files"""
-        #this is to be read from file currently.
+        self.tracer = tracer
+        # this is to be read from file currently.
         self._zq = None
-        #survey
+        # survey
         self._survey = survey
-        #magnitude info from survey class (g or r)
+        # magnitude info from survey class (g or r)
         self._band = self._survey.band
-        #exposure number/time to read from file, fixed for now.
+        # exposure number/time to read from file, fixed for now.
         self._file_num_exp = 4
         self._file_exp_time = 4000
-        #get directory containing snr/mag files
-        self._snr_file_dir = get_dir(config['lya forest'].get('snr-file-dir'))
-        #list of filenames
+
+        # get directory containing snr/mag files
+        self._snr_file_dir = get_dir(tracer.config.get('snr-file-dir'))
+        # list of filenames
         self._filenames = list(self._snr_file_dir.glob('*'))
         assert len(self._filenames) > 0, 'SNR files not found'
 
-        #load snr per pixel interpolater
+        if other_tracer is not None:
+            # get directory containing snr/mag files
+            self._snr_file_dir_other = get_dir(other_tracer.config.get('snr-file-dir'))
+            # list of filenames
+            self._filenames_other = list(self._snr_file_dir_other.glob('*'))
+            assert len(self._filenames_other) > 0, 'SNR files not found'
+
+        # load snr per pixel interpolater
         self._setup_desi_spectro()
 
-    def _read_file(self,mag):
-        """Read one of the files with SNR as a function of zq and lambda, given magnitude, band, exptime"""
-        #set exposure time, currently fixed at 4000.
-        #this is not particularly flexible
-        fname = self._snr_file_dir.joinpath(f'snr-{self._band}{mag}-t{str(self._file_exp_time)}-nexp{self._file_num_exp}.dat')
+    def _read_file(self, mag):
+        """
+        Read one of the files with SNR as a function of zq and lambda,
+        given magnitude, band, exptime
+        """
+        # set exposure time, currently fixed at 4000.
+        # this is not particularly flexible
+        fname = self._snr_file_dir.joinpath(
+            f'snr-{self._band}{mag}-t{str(self._file_exp_time)}-nexp{self._file_num_exp}.dat')
 
-        print("reading magnitude {} in file {}".format(mag,fname))
+        print("reading magnitude {} in file {}".format(mag, fname))
         fname = check_file(fname)
 
         data = np.loadtxt(fname)
-        lambda_obs = data[:,0]
-        pixel_snr = data[:,1:]
+        lambda_obs = data[:, 0]
+        pixel_snr = data[:, 1:]
 
-        return lambda_obs,pixel_snr
+        if self._snr_file_dir_other is not None:
+            fname_other = self._snr_file_dir_other.joinpath(
+                f'snr-{self._band}{mag}-t{str(self._file_exp_time)}-nexp{self._file_num_exp}.dat')
 
-    def _setup_old(self):
-        """Setup objects from file(s). Files were generated using
-            desihub/desimodel/bin/desi_quicklya.py"""
-        # number of exposures in file with SNR
-        self._file_num_exp = 4
-        # quasar magnitudes in file
-        self.mags = np.arange(19.25,25.0,0.5)
-        # quasar redshifts in file
-        self.zq = np.arange(2.0,4.9,0.25)
-        # pixel wavelengths in file
-        self.lobs_A = None
-        # signal to noise per pixel in file
-        self.SN = None
-        Nm=len(self.mags)
-        for i in range(Nm):
-            m = self.mags[i]
-            l_A,SN = self._read_file(m)
-            if i == 0:
-                self.lobs_A = l_A
-                Nm=len(self.mags)
-                Nz=len(self.zq)
-                Nl=len(self.lobs_A)
-                self.SN = np.empty((Nm,Nz,Nl))
-            self.SN[i,:,:] = SN.transpose()
+            print("reading magnitude {} in file {}".format(mag, fname_other))
+            fname_other = check_file(fname_other)
 
-        # setup interpolator
-        self.SN = RegularGridInterpolator((self.mags,self.zq,self.lobs_A),self.SN)
-        return True
+            data_other = np.loadtxt(fname_other)
+            lambda_obs_other = data_other[:, 0]
+            pixel_snr_other = data_other[:, 1:]
+
+            # assert np.all(lambda_obs == lambda_obs_other), (
+            #     "Wavelengths in other spectrograph file do not match")
+            if pixel_snr.shape[0] > pixel_snr_other.shape[0]:
+                lambda_obs = lambda_obs[:lambda_obs_other.shape[0]]
+                pixel_snr = pixel_snr[:pixel_snr_other.shape[0]]
+            elif pixel_snr.shape[0] < pixel_snr_other.shape[0]:
+                lambda_obs_other = lambda_obs_other[:lambda_obs.shape[0]]
+                pixel_snr_other = pixel_snr_other[:pixel_snr.shape[0]]
+
+            # average the two spectrographs
+            pixel_snr = np.sqrt(pixel_snr * pixel_snr_other)
+
+        return lambda_obs, pixel_snr
 
     def _setup_desi_spectro(self):
         """Setup objects from file(s). Files were generated using
@@ -80,26 +90,28 @@ class Spectrograph:
 
         self._read_desi_file_header()
 
-        num_magnitudes=len(self._magnitudes)
+        num_magnitudes = len(self._magnitudes)
         for i in range(num_magnitudes):
             m = self._magnitudes[i]
-            lambda_obs_m,pixel_snr_mag = self._read_file(m)
+            lambda_obs_m, pixel_snr_mag = self._read_file(m)
             if i == 0:
                 self._lambda_obs_m = lambda_obs_m
-                num_m  = num_magnitudes
+                num_m = num_magnitudes
                 num_z = len(self._zq)
                 num_wave = len(lambda_obs_m)
 
-                self._snr_mat = np.zeros((num_m,num_z,num_wave))
-            self._snr_mat[i,:,:] = pixel_snr_mag.T
+                self._snr_mat = np.zeros((num_m, num_z, num_wave))
+            self._snr_mat[i, :, :] = pixel_snr_mag.T
 
-        #smooth rather noisy matrix
+        # smooth rather noisy matrix
         sigma_smooth = 10
-        self._snr_mat = gaussian_filter1d(self._snr_mat,sigma_smooth,axis=2)
-
+        self._snr_mat = gaussian_filter1d(self._snr_mat, sigma_smooth, axis=2)
 
         # setup interpolator
-        self._snr_interp = RegularGridInterpolator((self._magnitudes,self._zq,self._lambda_obs_m),self._snr_mat,bounds_error=False, fill_value=None)
+        self._snr_interp = RegularGridInterpolator(
+            (self._magnitudes, self._zq, self._lambda_obs_m),
+            self._snr_mat, bounds_error=False, fill_value=None
+        )
 
     def _read_desi_file_header(self):
         # expect files with following header
@@ -112,50 +124,56 @@ class Spectrograph:
         # EXPTIME= 4000.0
         # NEXP= 4
         #
-        # Wave SN(z=2.0) SN(z=2.25) SN(z=2.5) SN(z=2.75) SN(z=3.0) SN(z=3.25) SN(z=3.5) SN(z=3.75) SN(z=4.0) SN(z=4.25) SN(z=4.5) SN(z=4.75)
+        # Wave SN(z=2.0) SN(z=2.25) SN(z=2.5) SN(z=2.75) SN(z=3.0) SN(z=3.25)
+        # SN(z=3.5) SN(z=3.75) SN(z=4.0) SN(z=4.25) SN(z=4.5) SN(z=4.75)
         """
 
         # find range of magnitudes
         magnitudes = []
         # quasar redshifts in file
         self.file_z_qso = None
-        keys=["INFILE","BAND","MAG","EXPTIME","NEXP"]
+        keys = ["INFILE", "BAND", "MAG", "EXPTIME", "NEXP"]
         for filename in self._filenames:
-            head=dict()
-            file=open(filename)
+            head = dict()
+            file = open(filename)
 
             for line in file.readlines():
-                if line[0] != "#" : continue
-                line=line.replace("#","").strip()
+                if line[0] != "#":
+                    continue
+                line = line.replace("#", "").strip()
                 for k in keys:
-                    if line.find(k)==0:
-                        head[k]=line.split()[-1]
-                if line.find("Wave")>=0:
+                    if line.find(k) == 0:
+                        head[k] = line.split()[-1]
+                if line.find("Wave") >= 0:
                     # will bravely read the redshifts here to make sure we get it right
-                    vals=line.split()
-                    tmpz=[]
+                    vals = line.split()
+                    tmpz = []
                     for tmp in vals[1:]:
-                        if tmp.find("SN(z=")<0:
-                            print("error in reading line",line)
+                        if tmp.find("SN(z=") < 0:
+                            print("error in reading line", line)
                             print("I expect something like:")
-                            print("# Wave SN(z=2.0) SN(z=2.25) SN(z=2.5) SN(z=2.75) SN(z=3.0) SN(z=3.25) SN(z=3.5) SN(z=3.75) SN(z=4.0) SN(z=4.25) SN(z=4.5) SN(z=4.75)")
+                            print(
+                                "# Wave SN(z=2.0) SN(z=2.25) SN(z=2.5) SN(z=2.75)"
+                                " SN(z=3.0) SN(z=3.25) SN(z=3.5) SN(z=3.75) SN(z=4.0)"
+                                " SN(z=4.25) SN(z=4.5) SN(z=4.75)"
+                            )
                             sys.exit(12)
-                        tmpz.append(float(tmp.replace("SN(z=","").replace(")","")))
-                    head["Z"]=np.array(tmpz)
+                        tmpz.append(float(tmp.replace("SN(z=", "").replace(")", "")))
+                    head["Z"] = np.array(tmpz)
             file.close()
 
             if self._band is None:
-                self._band=head["BAND"]
+                self._band = head["BAND"]
             else:
-                assert(self._band==head["BAND"])
+                assert self._band == head["BAND"] 
             if self._file_num_exp is None:
-                self._file_num_exp=int(head["NEXP"])
+                self._file_num_exp = int(head["NEXP"])
             else:
-                assert(self._file_num_exp==int(head["NEXP"]))
+                assert self._file_num_exp == int(head["NEXP"])
             if self._zq is None:
-                self._zq=head["Z"]
+                self._zq = head["Z"]
             else:
-                assert(np.all(self._zq==head["Z"]))
+                assert np.all(self._zq == head["Z"])
             magnitudes.append(float(head["MAG"]))
 
         # quasar magnitudes in file
@@ -171,24 +189,24 @@ class Spectrograph:
 
     def range_zq(self):
         """Return range of quasar redshifts from file"""
-        return self.zq[0],self.zq[-1]
+        return self.zq[0], self.zq[-1]
 
     def range_mag(self):
         """Return range of magnitudes from file"""
-        return self.mags[0],self.mags[-1]
+        return self.mags[0], self.mags[-1]
 
     def range_lobs_A(self):
         """Return range of wavelengths from file"""
-        return self.lobs_A[0],self.lobs_A[-1]
+        return self.lobs_A[0], self.lobs_A[-1]
 
-    def get_pixel_rms_noise(self,rmag,zq,lam_obs,pix_width,num_exp=4):
+    def get_pixel_rms_noise(self, rmag, zq, lam_obs, pix_width, num_exp=4):
         """Normalized noise RMS as a function of observed magnitude, quasar
           redshift, pixel wavelength (in A), and pixel width (in A).
           Normalized means that this is the noise for delta_flux, not flux, and
           brighter quasars will have less normalized noise.
           In other words, this is inverse of signal to noise.
           If S/N = 0, or not covered, return very large number."""
-        large_noise=1e10
+        large_noise = 1e10
         if rmag > self._magnitudes[-1]:
             return large_noise
         if zq > self._zq[-1] or zq < self._zq[0]:
@@ -199,13 +217,12 @@ class Spectrograph:
             print('Forest wavelength out of bounds, returning large noise')
             return large_noise
 
-
         # if brighter than minimum magnitude, use minimum
         # (c++ code does extrapolation, not clear what is better)
         trmag = np.fmax(rmag, self._magnitudes[0])
 
         # DESI file returns S/N per Angstrom, per file_num_exp exposures
-        snr_per_ang = self._snr_interp([trmag,zq,lam_obs])
+        snr_per_ang = self._snr_interp([trmag, zq, lam_obs])
         # scale with pixel width
         snr_per_exp = snr_per_ang * np.sqrt(pix_width)
         # scale with number of exposures
@@ -215,8 +232,8 @@ class Spectrograph:
 
         return 1 / snr
 
-    #TO-DO, if which = qso, do not include pix width smoothing
-    def smooth_kernel_kms(self,pix_kms,res_kms,k_kms):
+    # TO-DO, if which = qso, do not include pix width smoothing
+    def smooth_kernel_kms(self, pix_kms, res_kms, k_kms):
         """Convolution kernel for the field (square this for power),
             including both pixelization and resolution"""
         # pixelization
@@ -227,5 +244,5 @@ class Spectrograph:
 
         return pixel_kernel * gauss_kernel
 
-    def get_snr_per_ang(self,mag,zq,lam):
-        return self._snr_interp([mag,zq,lam])
+    def get_snr_per_ang(self, mag, zq, lam):
+        return self._snr_interp([mag, zq, lam])
