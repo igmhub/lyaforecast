@@ -122,6 +122,12 @@ class NewForecast:
 
                 self.correlations[f"{t1}_{t2}"] = (self.tracers[t1], self.tracers[t2])
 
+        correlation_names = self.config['control'].get('correlations', 'all').split(' ')
+        self.correlations_to_compute = []
+        for key in self.correlations.keys():
+            if 'all' in correlation_names or key in correlation_names:
+                self.correlations_to_compute.append(key)
+
         self.logger.info(f"Tracers: {list(self.tracers.keys())}")
         self.logger.info(f"Correlations: {self.correlations}")
 
@@ -263,6 +269,9 @@ class NewForecast:
             # Compute fisher for each correlation separately
             # For cross_correlations need to pass the two autos as well (no idea why)
             for ic, corr in enumerate(self.correlations.keys()):
+                if corr not in self.correlations_to_compute:
+                    continue
+
                 print(f"Computing Fisher for correlation: {corr}")
                 # initialise Fisher matrix computation class
                 fisher = Fisher(
@@ -300,9 +309,13 @@ class NewForecast:
             )
 
             # Compute fisher for all correlations combined
+            p3d_subset = {
+                key: fisher_input['p3d_cache'][key]
+                for key in self.correlations_to_compute
+            }
             fisher_mat = fisher.compute_fisher(
-                fisher_input['p3d_cache'], fisher_input['p3d_obs_cache'],
-                list(self.correlations.keys())
+                p3d_subset, fisher_input['p3d_obs_cache'],
+                self.correlations_to_compute
             )
 
             name = f'{self.num_correlations}x2pt'
