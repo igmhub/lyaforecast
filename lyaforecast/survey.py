@@ -131,14 +131,14 @@ class Survey:
         self._lya_mmin = m[0]  # - 0.5*dm
         self._lya_mmax = m[-1]  # + 0.5*dm
 
-        if self.lya_tracer == 'lbg':
-            # smooth (currently) noisy dndz
-            sigma_smooth = 1.5
-            tdNdmdzddeg2_smooth = copy.deepcopy(tdNdmdzddeg2)
-            for i, dndm in enumerate(tdNdmdzddeg2):
-                tdNdmdzddeg2_smooth[i] = gaussian_filter1d(dndm, sigma_smooth, axis=0)
+        # if self.lya_tracer == 'lbg':
+        #     # smooth (currently) noisy dndz
+        #     sigma_smooth = 1.5
+        #     tdNdmdzddeg2_smooth = copy.deepcopy(tdNdmdzddeg2)
+        #     for i, dndm in enumerate(tdNdmdzddeg2):
+        #         tdNdmdzddeg2_smooth[i] = gaussian_filter1d(dndm, sigma_smooth, axis=0)
 
-            tdNdmdzddeg2 = tdNdmdzddeg2_smooth
+        #     tdNdmdzddeg2 = tdNdmdzddeg2_smooth
 
         interpolator = RectBivariateSpline(
             z, m, tdNdmdzddeg2, bbox=[self._zmin, self._zmax, self._lya_mmin, self._lya_mmax],
@@ -179,14 +179,14 @@ class Survey:
         self._tracer_mmin = m[0]  # - 0.5*dm
         self._tracer_mmax = m[-1]  # + 0.5*dm
 
-        if (self.tracer == 'lbg') | (self.tracer == 'lae'):
-            # smooth (currently) noisy dndz
-            sigma_smooth = 1.5
-            tdNdmdzddeg2_smooth = copy.deepcopy(tdNdmdzddeg2)
-            for i, dndm in enumerate(tdNdmdzddeg2):
-                tdNdmdzddeg2_smooth[i] = gaussian_filter1d(dndm, sigma_smooth, axis=0)
+        # if (self.tracer == 'lbg') | (self.tracer == 'lae'):
+        #     # smooth (currently) noisy dndz
+        #     sigma_smooth = 1.5
+        #     tdNdmdzddeg2_smooth = copy.deepcopy(tdNdmdzddeg2)
+        #     for i, dndm in enumerate(tdNdmdzddeg2):
+        #         tdNdmdzddeg2_smooth[i] = gaussian_filter1d(dndm, sigma_smooth, axis=0)
 
-            tdNdmdzddeg2 = tdNdmdzddeg2_smooth
+        #     tdNdmdzddeg2 = tdNdmdzddeg2_smooth
 
         interpolator = RectBivariateSpline(
             z, m, tdNdmdzddeg2, bbox=[self._zmin, self._zmax, self._tracer_mmin, self._tracer_mmax],

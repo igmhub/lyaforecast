@@ -208,6 +208,8 @@ class Forecast:
                     )
                     for mu in self._power_spec.mu
                 ]))
+                print(f"Computed P3D for {corr_name} at z={zc}")
+                print(f"sum P3D: {np.sum(p3d_cache[corr])}")
 
             # compute measured power spectra (e.g. including noise)
             p3d_obs_cache = {}
@@ -223,6 +225,8 @@ class Forecast:
                     self._covariance.compute_total_power(
                         self._power_spec.k, mu, corr)
                     for mu in self._power_spec.mu])
+                print(f"Computed P3D_obs for {corr_name} at z={zc}")
+                print(f"sum P3D_obs: {np.sum(p3d_obs_cache[corr_name])}")
 
             fisher_mat = fisher.compute_fisher(
                 p3d_cache, p3d_obs_cache, corr_names_cut)
