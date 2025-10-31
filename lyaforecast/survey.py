@@ -153,7 +153,8 @@ class Survey:
         if self.tracer_density is not None:
             #re-scale based on lya qso requirements
             if self.tracer == 'qso':
-                current_total_density = np.sum(tdNdmdzddeg2.reshape(z.size,m.size)[z>2.15])
+                z_min_lya = 2.15
+                current_total_density = np.sum(tdNdmdzddeg2.reshape(z.size,m.size)[z>z_min_lya])
             else:
                 current_total_density = np.sum(tdNdmdzddeg2.reshape(z.size,m.size))
             print("Scaling dndzdm tracer from a total density of {} to {}/deg2".format(current_total_density,

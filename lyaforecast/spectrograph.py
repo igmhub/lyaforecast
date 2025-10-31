@@ -199,7 +199,7 @@ class Spectrograph:
                 #print(f'mag {rmag} too faint, returning large noise')
                 return large_noise        
         if zq > self._zq[-1] or zq < self._zq[0]: 
-            #print(f'zqso {zq} out of range, returning large noise')
+            print(f'zqso {zq} out of range, returning large noise')
             return large_noise
         
         if (self._lambda_obs_m[-1] < lam_obs) or (lam_obs < self._lambda_obs_m[0]):
