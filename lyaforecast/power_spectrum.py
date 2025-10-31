@@ -15,6 +15,9 @@ class PowerSpectrum:
         #get analytical biases
         self.bias = AnalyticBias(config, self._cosmo)
 
+        #absorption
+        self._absorption= config['forest'].get('absorption')
+
         #power spectrum calculation details
         _properties = config['power spectrum']
         self._k_min_hmpc = _properties.getfloat('k_min_hmpc', 1e-4)
@@ -140,7 +143,12 @@ class PowerSpectrum:
         k_kms = np.fmax(k_kms,k_min)
         exp1 = 3 + n_F_z + alpha_F * np.log(k_kms/k0)
         toret = np.pi * A_F / k0 * pow(k_kms/k0, exp1-1) * pow((1+z)/(1+z0), B_F)
-        return toret 
+
+        #A hack for until P1D is computed in a better way.
+        if self._absorption=='civ':
+            return toret * 0.04
+        else:
+            return toret 
     
     #currently un-used
     def compute_p1d_hmpc(self,z,k_hmpc,res_hmpc=None,pix_hmpc=None):
