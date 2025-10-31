@@ -16,10 +16,10 @@ class Plots:
         
         self._forecast = forecast
         if forecast is not None:
-            self._survey = forecast.survey
-            self._covariance = forecast.covariance
-            self._power_spec = forecast.power_spec
-            self._cosmo = forecast.cosmo
+            self._survey = forecast._survey
+            self._covariance = forecast._covariance
+            self._power_spec = forecast._power_spec
+            self._cosmo = forecast._cosmo
 
         if data is not None:
             self._data = data
@@ -444,10 +444,10 @@ class Plots:
             else:
                 mags = [19,20,21,22,23]
                 #zqs = [2,2.25,2.5,2.75,3,3.25,3.5,3.75,4,4.25,4.5,4.75]
-                zq = 2.5#np.linspace(2,3.5,10)
+                zq = 1.95#np.linspace(2,3.5,10)
                 #dz = zqs[1]-zqs[0]
-                lmax = 4250
-                lmin = 3600
+                lmax = 4500
+                lmin = 4000
                 nb = 100
                 # snr = np.zeros(nb)
                 snr_z = np.zeros(nb)

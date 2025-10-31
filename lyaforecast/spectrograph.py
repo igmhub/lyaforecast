@@ -16,11 +16,11 @@ class Spectrograph:
         self._survey = survey
         #magnitude info from survey class (g or r)
         self._band = self._survey.band
-        #exposure number/time to read from file, fixed for now.
-        self._file_num_exp = 4
+        #exposure number time in file
+        self._file_num_exp = config['forest'].getint('file num exposures')
         self._file_exp_time = 4000
         #get directory containing snr/mag files
-        self._snr_file_dir = get_dir(config['lya forest'].get('snr-file-dir'))
+        self._snr_file_dir = get_dir(config['forest'].get('snr-file-dir'))
         #list of filenames
         self._filenames = list(self._snr_file_dir.glob('*'))
         assert len(self._filenames) > 0, 'SNR files not found'
@@ -29,13 +29,17 @@ class Spectrograph:
         self._setup_desi_spectro()
 
     def _read_file(self,mag):
-        """Read one of the files with SNR as a function of zq and lambda, given magnitude, band, exptime"""
-        #set exposure time, currently fixed at 4000.
-        #this is not particularly flexible
-        fname = self._snr_file_dir.joinpath(f'sn-spec-lya-20180907-{self._band}{mag}-t{str(self._file_exp_time)}-nexp{self._file_num_exp}.dat')
+        """Read one of the files with SNR as a function of zq and lambda, given (r-band) magnitude value"""
 
-        print("reading magnitude {} in file {}".format(mag,fname))
-        fname = check_file(fname)
+        pattern = f"-r{mag}-"
+        match = [f for f in self._filenames if pattern in f.name]
+
+        if not match:
+            raise FileNotFoundError(f"No file found for magnitude {mag}")
+        if len(match) > 1:
+            raise ValueError(f"⚠️ Multiple files found for mag={mag}, returning first match.")
+
+        fname = check_file(match[0])
 
         data = np.loadtxt(fname)
         lambda_obs = data[:,0]

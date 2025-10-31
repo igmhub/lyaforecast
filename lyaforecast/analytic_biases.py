@@ -4,12 +4,12 @@ import numpy as np
 class AnalyticBias:
     """Class to store analytic formulae for biases of Lya P3D, including non-linear corrections.
         These will later be handled by ForestFlow, currently parameter values are out-of-date."""
-    OPTIONS = ['lya','qso','lbg','lae']
+    OPTIONS = ['lya','civ','qso','lbg','lae']
 
-    def __init__(self,cosmo):
+    def __init__(self,config, cosmo):
+        self._biasing = config['biasing']
         self._cosmo = cosmo
         self._growth_rate = self._cosmo.growth_rate
-        self._zref = self._cosmo.z_ref
 
     def _get_non_linear_corr(self,k_hMpc):
         """Non-linear correction"""
@@ -34,56 +34,27 @@ class AnalyticBias:
         return pow(kpar/kv, alpha_v)
     
     def _get_density_bias(self,z,which):
-        """Linear density bias as a function of redshift, 
-            values from DESI Collaboration et al., 2025"""
-        if which=='lya':
-            alpha = 2.9
-            bias_zref = -0.1352
-            zref = 2.33
-        elif which=='qso':
-            alpha = 1.44
-            bias_zref = 3.54
-            zref = 2.33
-        elif which=='lbg':
-            #From Vanina et al. 2024
-            alpha = 1.44
-            bias_zref = 3.48
-            zref = 2.9
-        elif which=='lae':
-            #From Vanina et al. 2024
-            alpha = 1.44
-            bias_zref = 2.2
-            zref = 2.9
-        else:
-            raise ValueError(f'invalid biasing: {which}, select from: {self.OPTIONS}')
+        """Retrieve linear density biases as a function of redshift.
+                Input values stored in config files."""
         
-        return bias_zref * ((1 + z)/(1 + zref))**alpha
+        bias = self._biasing.getfloat(which + ' bias')
+        zref = self._biasing.getfloat(which + ' zref')
+        bias_evol = self._biasing.getfloat(which + ' bias evol')
+
+        return bias * ((1 + z)/(1 + zref))**bias_evol
 
     def _get_beta_rsd(self,z,which):
-        """Linear RSD anisotropy parameter as a function of redshift,
-        values from DESI Collaboration et al., 2025"""
-        if which=='lya':
-            alpha = 0.0
-            zref = 2.33
-            beta_zref = 1.45
-        elif which=='qso':
-            alpha = 0.0
-            zref = 2.33
-            beta_zref = self._growth_rate/self._get_density_bias(z,which)
-        elif which=='lbg':
-            alpha = 0.0
-            zref = 2.7
-            beta_zref = self._growth_rate/self._get_density_bias(z,which)
-        elif which=='lae':
-            alpha = 0.0
-            zref = 2.7
-            beta_zref = self._growth_rate/self._get_density_bias(z,which)
-            #to fix: growth-rate here is estimated at zref set by camb config. Maybe it's ok, given we evolve P_L.
-
-        else:
-            raise ValueError(f'invalid biasing: {which}, select from: {self.OPTIONS}')
+        """Retrieve linear RSD anisotropy parameter as a function of redshift.
+                Input values stored in config files."""
+        beta = self._biasing.getfloat(which + ' rsd', None)
         
-        return beta_zref*((1 + z)/(1 + zref))**alpha
+        if beta is None:
+            #print('Beta RSD not given, estimating assuming beta = f / b.')
+            beta = self._growth_rate/self._get_density_bias(z,which)
+            #to fix: growth-rate here is estimated at zref set by camb config. Maybe it's ok, given we evolve P_L.
+        zref = self._biasing.getfloat(which + ' zref')
+
+        return beta*((1 + z)/(1 + zref))
 
     def _small_scale_correction(self,k_hmpc,mu,which):
         """Analytic formula for small-scales correction to Lyman alpha P3D(z,k,mu) 

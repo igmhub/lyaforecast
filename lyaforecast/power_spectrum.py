@@ -13,7 +13,10 @@ class PowerSpectrum:
         self._spectrograph = spectrograph
         self._growth_rate = self._cosmo.growth_rate
         #get analytical biases
-        self.bias = AnalyticBias(self._cosmo)
+        self.bias = AnalyticBias(config, self._cosmo)
+
+        #absorption
+        self._absorption= config['forest'].get('absorption')
 
         #power spectrum calculation details
         _properties = config['power spectrum']
@@ -52,7 +55,7 @@ class PowerSpectrum:
     
     def compute_p1d_kms(self,z,kp_kms,res_kms,pix_kms):
         """1D Lya power spectrum in observed coordinates,
-            smoothed with pixel width and resolution."""
+            smoothed with pixel width and resolution. Want to replace with an integral over 3D."""
         # get P1D before smoothing
         p1d_kms = self.compute_p1d_palanque2013(z,kp_kms)
         # smoothing (pixelization and resolution)
@@ -61,10 +64,11 @@ class PowerSpectrum:
 
         return p1d_kms
 
-    def compute_p3d_kms(self,z,kt_deg,kp_kms,res_kms,pix_kms,which='lya'):
+    def compute_p3d_kms(self,z,kt_deg,kp_kms,res_kms,pix_kms,which):
         """3D Lya power spectrum in observed coordinates. 
             Power smoothed with pixel width and resolution.
             If self._linear=True, it will ignore small scale correction."""
+
         # transform km/s to Mpc/h
         dkms_dhmpc = self._cosmo.velocity_from_distance(z)
         kp_hmpc = kp_kms * dkms_dhmpc
@@ -77,6 +81,7 @@ class PowerSpectrum:
 
         # compute power in Mpc/h (from power_spectrum module)
         p3d_hmpc = self.compute_p3d_hmpc(z,k_hmpc,mu,which)
+
         # convert power to observed units
         p3d_degkms = p3d_hmpc * dkms_dhmpc / dhmpc_ddeg**2
         # convert resolution to kms
@@ -87,7 +92,7 @@ class PowerSpectrum:
 
         return p3d_degkms
 
-    def compute_p3d_hmpc(self,z,k_hmpc,mu,which='lya'):
+    def compute_p3d_hmpc(self,z,k_hmpc,mu,which):
         """3D power spectrum P_F(z,k,mu). 
         If linear=True, it will ignore small scale correction."""
         # get linear power at zrefs
@@ -100,7 +105,7 @@ class PowerSpectrum:
 
         return pk_zref * b
     
-    def compute_p3d_hmpc_smooth(self,z,k_hmpc,mu,pix_kms,res_kms,which='lya'):
+    def compute_p3d_hmpc_smooth(self,z,k_hmpc,mu,pix_kms,res_kms,which):
         """Smooth power spectrum (convert to k space then back.)"""
 
         #conversions
@@ -138,7 +143,12 @@ class PowerSpectrum:
         k_kms = np.fmax(k_kms,k_min)
         exp1 = 3 + n_F_z + alpha_F * np.log(k_kms/k0)
         toret = np.pi * A_F / k0 * pow(k_kms/k0, exp1-1) * pow((1+z)/(1+z0), B_F)
-        return toret 
+
+        #A hack for until P1D is computed in a better way.
+        if self._absorption=='civ':
+            return toret * 0.04
+        else:
+            return toret 
     
     #currently un-used
     def compute_p1d_hmpc(self,z,k_hmpc,res_hmpc=None,pix_hmpc=None):
