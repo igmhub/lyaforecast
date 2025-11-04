@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import RectBivariateSpline,interp1d
 from lyaforecast.utils import get_file
 import copy
 from scipy.ndimage import gaussian_filter1d
@@ -33,6 +33,20 @@ class Tracer:
             self.name = f'{self.simple_name}({self.background_tracer})'
         else:
             self.name = self.simple_name
+
+        self.bias_func = None
+
+        bias_z_str = self.config.get("bias z")
+        if bias_z_str is not None :
+            bias_val_str = self.config.get("bias val")
+            if bias_val_str is None :
+                raise(KeyError("need either both 'bias z' and 'bias val' or none in tracer config"))
+            bias_z = np.array([float(val) for val in bias_z_str.split(" ")])
+            bias_val = np.array([float(val) for val in bias_val_str.split(" ")])
+            print("bias z=",bias_z)
+            print("bias val=",bias_val)
+            self.bias_func = interp1d(bias_z,bias_val,kind='linear', bounds_error=False, fill_value='extrapolate')
+
 
     def get_dn_dzdm(self, z, m):
         points = self._tracer_dndz(z, m, grid=False)

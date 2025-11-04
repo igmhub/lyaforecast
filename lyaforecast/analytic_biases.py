@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.interpolate import interp1d
 
 
 # to-do, make this less hard-coded
@@ -6,13 +7,14 @@ class AnalyticBias:
     """Class to store analytic formulae for biases of Lya P3D, including non-linear corrections.
         These will later be handled by ForestFlow, currently parameter values are out-of-date."""
     OPTIONS = ['lya', 'qso', 'lbg', 'lae']
-    _tracer_bias = None
+    # _tracer_bias = None  # replace by functions, called in _get_density_bias
     _zbin_index = None
 
     def __init__(self, cosmo):
         self._cosmo = cosmo
-        self._growth_rate = self._cosmo.growth_rate
+        self._growth_rate_func = interp1d(self._cosmo.z_bins,self._cosmo.growth_rate_zbins,kind='linear', bounds_error=False, fill_value='extrapolate')
         self._zref = self._cosmo.z_ref
+        self._density_bias_func = dict()
 
     def _get_non_linear_corr(self, k_hMpc):
         """Non-linear correction"""
@@ -39,7 +41,11 @@ class AnalyticBias:
     def _get_density_bias(self, z, which):
         """Linear density bias as a function of redshift,
             values from DESI Collaboration et al., 2025"""
-        if which == 'lya':
+
+        if which in self._density_bias_func.keys() :
+            # use externally provided bias function
+            return self._density_bias_func[which](z)
+        elif which == 'lya' :
             alpha = 2.9
             bias_zref = -0.1352
             zref = 2.33
@@ -69,27 +75,13 @@ class AnalyticBias:
             alpha = 0.0
             zref = 2.33
             beta_zref = 1.45
-        elif which == 'qso':
-            alpha = 0.0
-            zref = 2.33
-            beta_zref = self._growth_rate/self._get_density_bias(z, which)
-        elif which == 'lbg':
-            alpha = 0.0
-            zref = 2.7
-            beta_zref = self._growth_rate/self._get_density_bias(z, which)
-        elif which == 'lae':
-            alpha = 0.0
-            zref = 2.7
-            beta_zref = self._growth_rate/self._get_density_bias(z, which)
-            # to fix: growth-rate here is estimated at zref set by camb config. Maybe it's ok, given we evolve P_L.
+            return beta_zref*((1 + z)/(1 + zref))**alpha
+        else :
+            return self._growth_rate_func(z)/self._get_density_bias(z, which)
 
-        else:
-            raise ValueError(f'invalid biasing: {which}, select from: {self.OPTIONS}')
-
-        return beta_zref*((1 + z)/(1 + zref))**alpha
 
     def _small_scale_correction(self, k_hmpc, mu, which):
-        """Analytic formula for small-scales correction to Lyman alpha P3D(z,k,mu) 
+        """Analytic formula for small-scales correction to Lyman alpha P3D(z,k,mu)
             from McDonald (2003).
             Values computed at z=2.33, it would be great to have z-evolution.
             Values are cosmology dependent, but we ignore it here.
@@ -117,53 +109,12 @@ class AnalyticBias:
 
         kaiser = 1
         for i, t in enumerate(tracers):
-            if 'lya' in t:
-                kaiser *= self._get_density_bias(z, 'lya')
-                kaiser *= (1 + self._get_beta_rsd(z, 'lya') * mu**2)
-            elif self._tracer_bias is not None and t in self._tracer_bias:
-                growth_rate = self._cosmo.growth_rate_zbins[self._zbin_index]
-                kaiser *= self._tracer_bias[t] * (
-                        1 + growth_rate/self._tracer_bias[t] * mu**2)
-            else:
-                kaiser *= self._get_density_bias(z, t) * (1 + self._get_beta_rsd(z, t) * mu**2)
-
+            if t.find("lya") == 0 :
+                t="lya"
+            kaiser *= self._get_density_bias(z, t) * (1 + self._get_beta_rsd(z, t) * mu**2)
         return kaiser
 
-        # if self._tracer_bias is not None:
-        #     kaiser_lya = None
-        #     kaiser_tracer = None
-        #     for t in tracers:
-        #         if t == 'lya':
-        #             kaiser_lya = self._get_density_bias(z, t)
-        #             kaiser_lya *= (1 + self._get_beta_rsd(z, t) * mu**2)
-        #         else:
-        #             growth_rate = self._cosmo.growth_rate_zbins[self._zbin_index]
-        #             kaiser_tracer = self._tracer_bias * (
-        #                 1 + growth_rate/self._tracer_bias * mu**2)
-
-        #     if kaiser_tracer is None:
-        #         kaiser = kaiser_lya**2
-        #     elif kaiser_lya is None:
-        #         kaiser = kaiser_tracer**2
-        #     else:
-        #         kaiser = kaiser_lya * kaiser_tracer
-
-        #     return kaiser
-
-        # if len(tracers) > 1:
-        #     b = self._get_density_bias(z, tracers[0]) * self._get_density_bias(z, tracers[1])
-        #     rsd = (1 + self._get_beta_rsd(z, tracers[0]) * mu**2) * (1 + self._get_beta_rsd(z, tracers[1]) * mu**2)
-        #     kaiser = b * rsd
-        # else:
-        #     b = self._get_density_bias(z, which)**2
-        #     rsd = (1 + self._get_beta_rsd(z, which) * mu**2)**2
-        #     kaiser = b * rsd
-        # if linear:
-        #     # currently only option
-        #     return kaiser
-        # else:
-        #     return kaiser * self._small_scale_correction(k_hmpc, mu, which)
-
-    def set_tracer_bias(self, bias, zbin_index):
-        self._tracer_bias = bias
-        self._zbin_index = zbin_index
+    def set_density_bias_func(self,tracer,bias_func) :
+        if not tracer in self.OPTIONS :
+            raise ValueError(f"in set_density_bias_func, tracer name must be in {self.OPTIONS}")
+        self._density_bias_func[tracer]=bias_func

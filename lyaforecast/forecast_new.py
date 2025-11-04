@@ -1,6 +1,6 @@
-"""Control module for lyaforecast. Should be structured as follows: 
+"""Control module for lyaforecast. Should be structured as follows:
     -   we use Covariance class for each config, and store observed powers and INDIVIDUAL covariances in ?dictionaries?
-    - Then, using the Fisher class, we compute the parameter measurements 
+    - Then, using the Fisher class, we compute the parameter measurements
 
 """
 import configparser
@@ -56,9 +56,8 @@ class NewForecast:
     """
     # _survey_properties = None
     # _spectro_properties = None
-    _tracer_biases = None
 
-    def __init__(self, cfg_path, tracer_biases=None):
+    def __init__(self, cfg_path):
         """
         Parameters
         ----------
@@ -163,6 +162,17 @@ class NewForecast:
         # load power spectrum instance
         self._power_spec = PowerSpectrum(self.config, self._cosmo, self._spectrograph)
 
+        # register the tracer biases
+        for tracer_name , tracer in self.tracers.items() :
+            if tracer.bias_func is not None :
+                short_name = tracer_name+""
+                if tracer_name.find("lya(")==0 :
+                    short_name=lya
+                print(f"Setting bias function for power spectrum for {short_name}")
+                self._power_spec.bias.set_density_bias_func(short_name,tracer.bias_func)
+            else :
+                print(f"No bias function provided for {tracer_name}")
+
         # initialise covariance class (McDonald & Eisenstein (2007)),
         # that stores info and methods to compute p3d and its variance
         self._covariance = {}
@@ -173,9 +183,6 @@ class NewForecast:
             )
 
         self.reconstruction_factor = self.config['survey'].getfloat('reconstruction factor', 1.0)
-
-        if tracer_biases is not None:
-            self.add_tracer_biases(tracer_biases)
 
         self.num_correlations = len(self.correlations)
 
@@ -232,10 +239,6 @@ class NewForecast:
 
             for ic, (corr_name, (tracer1, tracer2)) in enumerate(self.correlations.items()):
                 print(f"Computing correlation: {corr_name}")
-
-                # Update tracer bias if provided
-                if self._tracer_biases is not None:
-                    self._power_spec.bias.set_tracer_bias(self._tracer_biases[iz], zbin_index=iz)
 
                 # call function, setting bin width
                 self._covariance[corr_name](*self._survey.z_bin_edges[:, iz])
@@ -343,6 +346,7 @@ class NewForecast:
         return data
 
     def run_forecast(self):
+
         sigma_at = np.zeros(self._survey.num_z_bins)
         sigma_ap = np.zeros(self._survey.num_z_bins)
         corr_coef = np.zeros(self._survey.num_z_bins)
@@ -376,6 +380,7 @@ class NewForecast:
             # Update tracer bias if provided
             if self._tracer_biases is not None:
                 self._power_spec.bias.set_tracer_bias(self._tracer_biases[iz], zbin_index=iz)
+
 
             # Compute P(k, mu) for all mu at once
             # Resulting shape will be (len(mu), len(k))
@@ -474,16 +479,3 @@ class NewForecast:
         if self.flags.tracer_auto:
             tracer_auto_name = f'{self._tracer}_{self._tracer}'
             self.spectrum_names['tracer auto'] = tracer_auto_name
-
-    def add_tracer_biases(self, tracer_biases):
-        """Add tracer biases instance to forecast.
-
-        Parameters
-        ----------
-        tracer_biases : TracerBiases
-            Instance of TracerBiases class.
-        """
-        assert len(tracer_biases) == self._survey.num_z_bins, (
-            "Length of tracer_biases must match number of survey z bins."
-        )
-        self._tracer_biases = tracer_biases
