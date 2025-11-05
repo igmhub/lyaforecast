@@ -122,13 +122,27 @@ class NewForecast:
                 self.correlations[f"{t1}_{t2}"] = (self.tracers[t1], self.tracers[t2])
 
         correlation_names = self.config['control'].get('correlations', 'all').split(' ')
+        # add the other ordering
+        flipped_correlation_names = list()
+        for corr in correlation_names :
+            if corr=="all" : continue
+            tt=corr.split("_")
+            if len(tt)!=2 :
+                raise ValueError(f"correlation name '{corr}' not valid")
+            if tt[0]==tt[1] : continue
+            flipped_cor  = tt[1]+"_"+tt[0]
+            flipped_correlation_names.append(flipped_cor)
+        correlation_names += flipped_correlation_names
+        #print("correlation_names=",correlation_names)
+
+
         self.correlations_to_compute = []
         for key in self.correlations.keys():
             if 'all' in correlation_names or key in correlation_names:
                 self.correlations_to_compute.append(key)
 
         self.logger.info(f"Tracers: {list(self.tracers.keys())}")
-        self.logger.info(f"Correlations: {self.correlations}")
+        self.logger.info(f"Correlations: {list(self.correlations.keys())}")
 
         # load survey instance
         self._survey = Survey(self.config)
@@ -238,6 +252,7 @@ class NewForecast:
             )
 
             for ic, (corr_name, (tracer1, tracer2)) in enumerate(self.correlations.items()):
+
                 print(f"Computing correlation: {corr_name}")
 
                 # call function, setting bin width
