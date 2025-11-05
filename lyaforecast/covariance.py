@@ -219,12 +219,17 @@ class Covariance:
         # weights instance
         lya_tracer = None
         discrete_tracer = None
-        if self._corr_type == 'tracer_auto':
+
+
+        if self._tracer1.type == 'discrete' :
             discrete_tracer = self._tracer1
-        elif self._corr_type == 'lya_auto':
+        else :
             lya_tracer = self._tracer1
-        else:
-            discrete_tracer = self._tracer1 if self._tracer1.type == 'discrete' else self._tracer2
+
+        if self._tracer2.type == 'discrete' :
+            discrete_tracer = self._tracer2
+        else  :
+            lya_tracer = self._tracer2
 
         self._weights = Weights(
             self._config, self._survey.maglist, self._cosmo, self._power_spec, self._spectrograph,
@@ -232,8 +237,8 @@ class Covariance:
             self._z_mean, self._zq, self._zmin, self._zmax, lya_tracer, discrete_tracer
         )
 
-        if self._corr_type == 'lya_auto':
-            # These only matter for lya auto-correlation
+        if lya_tracer is not None :
+            # These only matter for lya
             # lyman-alpha weights
             w_lya = self._weights.compute_weights(corr_name)
             self._w_lya = w_lya
@@ -264,12 +269,12 @@ class Covariance:
         kt_deg = kt_hmpc * self._angle_to_distance
 
         tracers = corr.split('_')
-        if 'lya' in tracers[0] and 'lya' in tracers[1]:
+        if 'lya' in tracers[0] and tracers[0] == tracers[1]:
             return self._compute_total_power_lya(kt_deg, kp_kms, corr)
-        elif tracers[0] == tracers[1]:
+        elif tracers[0] == tracers[1]: # (so, there is no lya)
             assert corr == self.tracer_corr, 'Mismatch in tracer names'
             return self._compute_total_power_tracer(k_hmpc, mu, corr)
-        else:
+        else: # no measurement noise in cross power
             return self._compute_total_power_cross(kt_deg, kp_kms, k_hmpc, mu, corr)
 
     def _compute_total_power_lya(self, kt_deg, kp_kms, corr):
@@ -362,7 +367,7 @@ class Covariance:
     #         Note that here 0 < mu < 1.
     #         """
 
-    #     # We should move to computing this in a vectorised fashion, rather than 
+    #     # We should move to computing this in a vectorised fashion, rather than
     #     # iterating over mu/k values. Then I wouldn't have to call the mu/k values
     #     # again.
 
