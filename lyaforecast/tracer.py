@@ -19,6 +19,10 @@ class Tracer:
         # tracer density
         self.tracer_density = self.config.getfloat('target density')
 
+        # tracer magnitude range
+        self.mag_min = self.config.getfloat('min_band_mag', None)
+        self.mag_max = self.config.getfloat('max_band_mag', None)
+
         self.background_tracer = None
         tracer_dzdz_file = get_file(self.config.get('dn dz'))
 
@@ -86,17 +90,27 @@ class Tracer:
         """Setup dndz/dm from file"""
 
         z, m, tdNdmdzddeg2 = np.loadtxt(file, unpack=True)
-        z = np.unique(z)
-        m = np.unique(m)
+
+        if self.mag_min is not None :
+            print("Enforcing m>={}".format(self.mag_min))
+            tdNdmdzddeg2 *= (m>=self.mag_min)
+
+        if self.mag_max is not None :
+            print("Enforcing m<={}".format(self.mag_max))
+            tdNdmdzddeg2 *= (m<=self.mag_max)
+
+
 
         # scale density of quasars to desired number. By default given staright from QLF
         if self.tracer_density is not None:
-            # the DESI requirement is 50 quasars per square degree above 2.15
             z_min_lya = 2.15
-            current_total_density = np.sum(tdNdmdzddeg2.reshape(z.size, m.size)[z > z_min_lya])
-            print("Scaling lya dndzdm from a total density (z>={}) of {} to {}/deg2".format(
+            current_total_density = np.sum(tdNdmdzddeg2*(z > z_min_lya))
+            print("Scaling lya dndzdm from a total density (z>={}) of {:.1f} to {:.1f}/deg2".format(
                 z_min_lya, current_total_density, self.tracer_density))
             tdNdmdzddeg2 *= (self.tracer_density/current_total_density)
+
+        z = np.unique(z)
+        m = np.unique(m)
 
         # This assumes entries are evenly spaced.
         dz = z[1] - z[0]
