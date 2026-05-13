@@ -24,9 +24,26 @@ class Fisher:
         # for a given mu work out fisher
         # sum over k,mu.
         # then do vectorised.
+
+        with_mu_derivative = True
+        if with_mu_derivative :
+            print("include terms dmodel/dmu*dmu/dalpha")
+
         for i, mu in enumerate(self._power_spec.mu):
             model_mu = np.stack([models[k][i, :] for k in models.keys()], axis=0)
-            dmodel_dlk = self.compute_derivatives(model_mu, mu, spectra_list)
+            if with_mu_derivative :
+                if i==self._power_spec.mu.size-1 :
+                    model_mu_minus = np.stack([models[k][i-1, :] for k in models.keys()], axis=0)
+                    model_mu_plus  = model_mu
+                else :
+                    model_mu_minus = model_mu
+                    model_mu_plus  = np.stack([models[k][i+1, :] for k in models.keys()], axis=0)
+
+                dmodel_dmu = (model_mu_plus-model_mu_minus)/self._power_spec.dmu
+                dmodelpeak_dlk , dmodelpeak_dmu = self.compute_derivatives(model_mu, mu, spectra_list, dmodel_dmu)
+            else :
+                dmodelpeak_dlk = self.compute_derivatives(model_mu, mu, spectra_list)
+
             pre_factor_mu = np.outer([mu**2, 1-mu**2], [mu**2, 1-mu**2])
 
             # measured power spectra
@@ -41,9 +58,16 @@ class Fisher:
             M_inv = np.linalg.inv(M)
             p_measured_matrix_inv = np.moveaxis(M_inv, 0, -1)
 
-            fisher_mu_k = np.einsum('ik,jik,jk->k', dmodel_dlk, p_measured_matrix_inv, dmodel_dlk)
+            fisher_mu_k = np.einsum('ik,jik,jk->k', dmodelpeak_dlk, p_measured_matrix_inv, dmodelpeak_dlk)
             fisher_mu = np.sum(fisher_mu_k)
             fisher += pre_factor_mu * fisher_mu
+
+            if with_mu_derivative :
+                # derivative of mu with ap and at = [mu*(1-mu**2), -mu*(1-mu**2)]
+                pre_factor_mu = np.outer([mu*(1-mu**2), -mu*(1-mu**2)], [mu*(1-mu**2), -mu*(1-mu**2)])
+                fisher_mu_k = np.einsum('ik,jik,jk->k', dmodelpeak_dmu, p_measured_matrix_inv, dmodelpeak_dmu)
+                fisher_mu = np.sum(fisher_mu_k)
+                fisher += pre_factor_mu * fisher_mu
 
         return fisher
 
@@ -94,7 +118,50 @@ class Fisher:
 
         return C_array, label_to_index
 
-    def compute_derivatives(self, model, mu, spectra_list):
+    def compute_derivatives(self, model, mu, spectra_list, dmodel_dmu=None):
+        """Return the differential of the a peak power spectrum component,
+            with respect to log k for a single value of mu. Also add BAO peak broadening."""
+        # i.e.
+        # k = sqrt( kp**2 + kt**2)
+        # k'  = sqrt( ap**2*k**2*mu2 + at**2*k**2*(1-mu2))
+        # k' = k*sqrt( ap**2*mu2 + at**2*(1-mu2))
+        # dk/dap         = mu2 * k
+        # dlog(k)/dap    = mu2
+        # dlog(k)/dat    = (1-mu2)
+        # dmodel/dap     = dmodel/dlog(k)*dlog(k)/dap    = dmodeldlk * mu2
+        # dmodel/dat     = dmodel/dlog(k)*dlog(k)/dat    = dmodeldlk * (1-mu2)
+
+        # Get P(k) for this μ
+        pk = self._get_p_pk(model)
+
+        # Apply peak smoothing
+        for i, name in enumerate(spectra_list):
+            # if name == 'lya_lya':
+            #     pk[i] *= self._get_peak_smoothing(mu, self.zbin_index)
+            if 'lya' not in name:
+                pk[i] *= self._get_peak_smoothing(
+                    mu, self.zbin_index, reconstruction_factor=self._reconstruction_factor)
+            else:
+                pk[i] *= self._get_peak_smoothing(mu, self.zbin_index)
+
+        # Compute derivative along k (with first entry zero padding)
+        dmodelpeak_dlk = np.zeros_like(pk)
+        dmodelpeak_dlk[:, 1:] = (pk[:, 1:] - pk[:, :-1]) / self._power_spec.dlogk[1:]
+
+        if dmodel_dmu is not None :
+            dmodelpeak_dmu = self._get_p_pk(dmodel_dmu)
+            # Apply peak smoothing
+            for i, name in enumerate(spectra_list):
+                if 'lya' not in name:
+                    dmodelpeak_dmu[i] *= self._get_peak_smoothing(
+                        mu, self.zbin_index, reconstruction_factor=self._reconstruction_factor)
+                else:
+                    dmodelpeak_dmu[i] *= self._get_peak_smoothing(mu, self.zbin_index)
+
+            return  dmodelpeak_dlk , dmodelpeak_dmu
+        return dmodelpeak_dlk
+
+    def compute_derivatives_dlk_and_dmu(self, model, dmodeldmu, mu, spectra_list):
         """Return the differential of the a peak power spectrum component,
             with respect to log k for a single value of mu. Also add BAO peak broadening."""
         # i.e.
@@ -123,7 +190,10 @@ class Fisher:
         # Compute derivative along k (with first entry zero padding)
         dmodel_dlk = np.zeros_like(pk)
         dmodel_dlk[:, 1:] = (pk[:, 1:] - pk[:, :-1]) / self._power_spec.dlogk[1:]
-
+        if compute_mu_derivative :
+            dmodel_dmu = np.zeros_like(pk)
+            dmodel_dmu[1:, :] = (pk[1:, :] - pk[:-1, :]) / self._power_spec.dmu
+            return  dmodel_dlk , dmodel_dmu
         return dmodel_dlk
 
     def _get_p_pk(self, model):
