@@ -13,8 +13,8 @@ class Covariance:
     _pix_kms = None  # pixel width in km/s
     _res_kms = None  # spectrograph resolution in km/s
 
-    TRACER_OPTIONS = ['qso', 'lbg', 'lae']
-    LYA_TRACER_OPTIONS = ['qso', 'lbg']
+    TRACER_OPTIONS = ['elgqso', 'qso', 'lbg', 'lae']
+    LYA_TRACER_OPTIONS = ['elgqso', 'qso', 'lbg']
     # CROSS_TRACER_OPTIONS = [
     #     'lya(qso)_qso', 'lya_lbg', 'lya_lae'
     #     ]

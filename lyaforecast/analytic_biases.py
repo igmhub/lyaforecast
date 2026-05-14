@@ -6,7 +6,7 @@ from scipy.interpolate import interp1d
 class AnalyticBias:
     """Class to store analytic formulae for biases of Lya P3D, including non-linear corrections.
         These will later be handled by ForestFlow, currently parameter values are out-of-date."""
-    OPTIONS = ['lya', 'qso', 'lbg', 'lae']
+    OPTIONS = ['lya', 'qso', 'elgqso', 'lbg', 'lae']
     # _tracer_bias = None  # replace by functions, called in _get_density_bias
     _zbin_index = None
 
@@ -49,7 +49,7 @@ class AnalyticBias:
             alpha = 2.9
             bias_zref = -0.1352
             zref = 2.33
-        elif which == 'qso':
+        elif which == 'qso' or which == 'elgqso':
             alpha = 1.44
             bias_zref = 3.54
             zref = 2.33
