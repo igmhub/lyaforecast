@@ -57,7 +57,10 @@ class Tracer:
             bias_val = np.array([float(val) for val in bias_val_str.split(" ")])
             print("bias z=",bias_z)
             print("bias val=",bias_val)
-            self.bias_func = interp1d(bias_z,bias_val,kind='linear', bounds_error=False, fill_value='extrapolate')
+            self.bias_func = interp1d(
+                bias_z, bias_val, kind='linear',
+                bounds_error=False, fill_value='extrapolate'
+            )
 
     def get_dn_dzdm(self, z, m):
         """Return the tracer number density per unit redshift and magnitude.
@@ -137,19 +140,21 @@ class Tracer:
         z, m, tdNdmdzddeg2 = np.loadtxt(file, unpack=True)
 
         if self.mag_min is not None :
-            print("Enforcing m>={}".format(self.mag_min))
+            print(f"Enforcing m>={self.mag_min}")
             tdNdmdzddeg2 *= (m>=self.mag_min)
 
         if self.mag_max is not None :
-            print("Enforcing m<={}".format(self.mag_max))
+            print(f"Enforcing m<={self.mag_max}")
             tdNdmdzddeg2 *= (m<=self.mag_max)
 
         # scale density of quasars to desired number. By default given staright from QLF
         if self.tracer_density is not None:
             z_min_lya = 2.15
             current_total_density = np.sum(tdNdmdzddeg2*(z > z_min_lya))
-            print("Scaling lya dndzdm from a total density (z>={}) of {:.1f} to {:.1f}/deg2".format(
-                z_min_lya, current_total_density, self.tracer_density))
+            print(
+                f"Scaling lya dndzdm from a total density (z>={z_min_lya}) of "
+                f"{current_total_density:.1f} to {self.tracer_density:.1f}/deg2"
+            )
             tdNdmdzddeg2 *= (self.tracer_density/current_total_density)
 
         z = np.unique(z)
@@ -200,8 +205,10 @@ class Tracer:
                 current_total_density = np.sum(tdNdmdzddeg2.reshape(z.size, m.size)[z > 2.15])
             else:
                 current_total_density = np.sum(tdNdmdzddeg2.reshape(z.size, m.size))
-            print("Scaling dndzdm tracer from a total density of {} to {}/deg2".format(
-                current_total_density, self.tracer_density))
+            print(
+                f"Scaling dndzdm tracer from a total density of "
+                f"{current_total_density} to {self.tracer_density}/deg2"
+            )
             tdNdmdzddeg2 *= (self.tracer_density/current_total_density)
 
         # This assumes entries are evenly spaced.

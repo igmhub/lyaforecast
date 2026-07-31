@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-"""Plot effective densities of measurements. For Lya it's the 2D effective density defined by McQuinn and White 2011. For tracers it's just the 3D density."""
+"""Plot effective densities of measurements.
+
+For Lya it's the 2D effective density defined by McQuinn and White 2011.
+For tracers it's just the 3D density.
+"""
 
 import argparse
 from lyaforecast import Forecast
@@ -55,8 +59,10 @@ def from_script(args):
             ne_i = (vol_eff['lya'][i][w])
             n_i_tr = (vol_eff['tracer'][i][w])
 
-            ax[0].plot(forecast.survey.maglist[w],ne_i,alpha=0.8,color=colours[j],label=lab_lya,linestyle=linestyles[i])
-            ax[1].plot(forecast.survey.maglist[w],n_i_tr,alpha=0.8,color=colours[j],label=lab_tr,linestyle=linestyles[i])
+            ax[0].plot(forecast.survey.maglist[w], ne_i, alpha=0.8,
+                       color=colours[j], label=lab_lya, linestyle=linestyles[i])
+            ax[1].plot(forecast.survey.maglist[w], n_i_tr, alpha=0.8,
+                       color=colours[j], label=lab_tr, linestyle=linestyles[i])
 
             if i == 0:
                 ax[0].legend(loc='upper left',fontsize=18)

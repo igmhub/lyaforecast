@@ -1,5 +1,6 @@
 """Control module for lyaforecast. Should be structured as follows:
-    -   we use Covariance class for each config, and store observed powers and INDIVIDUAL covariances in ?dictionaries?
+    -   we use Covariance class for each config, and store observed powers and
+        INDIVIDUAL covariances in ?dictionaries?
     - Then, using the Fisher class, we compute the parameter measurements
 
 """

@@ -98,7 +98,8 @@ class Fisher:
         Parameters
         ----------
         measured_power_spectra : dict
-            Keys are strings like 'lya_lya', 'qso_qso', 'lya_qso'; values are arrays of shape (n_k,).
+            Keys are strings like 'lya_lya', 'qso_qso', 'lya_qso';
+            values are arrays of shape (n_k,).
         labels : list of str
             Ordered list of correlation names defining the covariance matrix rows/columns.
 

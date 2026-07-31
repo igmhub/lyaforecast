@@ -64,5 +64,7 @@ class Survey:
             self.z_bin_edges = np.array([self.z_bin_centres - dz / 2, self.z_bin_centres + dz / 2])
         else:
             z_list = np.linspace(self.zmin, self.zmax, self.num_z_bins + 1)
-            self.z_bin_edges = np.array([[z_list[i], z_list[i + 1]] for i in range(self.num_z_bins)]).T
+            self.z_bin_edges = np.array(
+                [[z_list[i], z_list[i + 1]] for i in range(self.num_z_bins)]
+            ).T
             self.z_bin_centres = self.z_bin_edges.mean(axis=0)

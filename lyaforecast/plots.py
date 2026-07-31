@@ -45,11 +45,15 @@ class Plots:
             fig,ax = plt.subplots(1,1,figsize=(10,6))
             #ax.plot(mags[1:],ap[1:]/ap[:-1],label=fr'$\alpha_\parallel$')
             ax.plot(mags,ap_lya,label=fr'$\alpha_\parallel Ly\alpha$',color='blue',alpha=0.5)
-            ax.plot(mags,at_lya,label=fr'$\alpha_\perp Ly\alpha$',linestyle='dashed',color='blue',alpha=0.5)
+            ax.plot(mags, at_lya, label=fr'$\alpha_\perp Ly\alpha$',
+                    linestyle='dashed', color='blue', alpha=0.5)
             # ax.plot(mags,ap_qso,label=fr'$\alpha_\parallel LBG$',color='red',alpha=0.5)
-            # ax.plot(mags,at_qso,label=fr'$\alpha_\perp LBG$',linestyle='dashed',color='red',alpha=0.5)
-            ax.plot(mags,ap_cross,label=fr'$\alpha_\parallel Ly\alpha x LBG$',color='green',alpha=0.5)
-            ax.plot(mags,at_cross,label=fr'$\alpha_\perp Ly\alpha x LBG$',linestyle='dashed',color='green',alpha=0.5)
+            # ax.plot(mags, at_qso, label=fr'$\alpha_\perp LBG$',
+            #         linestyle='dashed', color='red', alpha=0.5)
+            ax.plot(mags, ap_cross, label=fr'$\alpha_\parallel Ly\alpha x LBG$',
+                    color='green', alpha=0.5)
+            ax.plot(mags, at_cross, label=fr'$\alpha_\perp Ly\alpha x LBG$',
+                    linestyle='dashed', color='green', alpha=0.5)
             ax.set_xlabel(fr'${band}_{{max}}$')
             ax.set_ylabel(f'% error')
             ax.set_xlim(22.5,25)
@@ -61,7 +65,8 @@ class Plots:
 
     def plot_da_h_z(self):
         """
-        Plot BAO parameter errors per redshift bin for individual correlations and their combination.
+        Plot BAO parameter errors per redshift bin for individual correlations
+        and their combination.
 
         Uses ``self._data``; stores the figure in ``self.fig``.
         """
@@ -79,26 +84,35 @@ class Plots:
         ap_desi_sci = [1.99,2.11,2.26,2.47,2.76,3.18,3.70,4.57,6.19,8.89]
         at_desi_sci = [1.95,2.18,2.46,2.86,3.40,4.21,5.29,7.10,10.46,15.91]
 
-        zs_desi_sv = np.array([2.15,2.25,2.35,2.45,2.55,2.65,2.75,2.85,2.95,3.05,3.15,3.25,3.35,3.45])
+        zs_desi_sv = np.array([
+            2.15, 2.25, 2.35, 2.45, 2.55, 2.65, 2.75, 2.85,
+            2.95, 3.05, 3.15, 3.25, 3.35, 3.45
+        ])
         ap_desi_sv = [2.16,2.24,2.36,2.52,2.77,3.11,3.5,4.05,4.71,5.51,6.78,8.41,11.1,14.8]
         at_desi_sv = [2.02,2.14,2.33,2.56,2.9,3.38,3.95,4.69,5.59,6.73,8.47,10.73,14.48,19.92]
 
         with self._make_style()[0], self._make_style()[1]: 
             fig,ax = plt.subplots(1,2,figsize=(20,6))
 
-            ax[0].plot(zs,ap_lya,label=fr'$\alpha_{{\parallel,\rm Ly\alpha}}$',alpha=0.5,color='blue')
-            ax[0].plot(zs,at_lya,label=fr'$\alpha_{{\perp,\rm Ly\alpha}}$',linestyle='dashed',alpha=0.5,color='blue')
+            ax[0].plot(zs, ap_lya, label=fr'$\alpha_{{\parallel,\rm Ly\alpha}}$',
+                       alpha=0.5, color='blue')
+            ax[0].plot(zs, at_lya, label=fr'$\alpha_{{\perp,\rm Ly\alpha}}$',
+                       linestyle='dashed', alpha=0.5, color='blue')
 
             ax[0].plot(zs,ap_qso,label=fr'$\alpha_{{\parallel,\rm qso}}$',alpha=0.5,color='red')
-            ax[0].plot(zs,at_qso,label=fr'$\alpha_{{\perp,\rm qso}}$',linestyle='dashed',alpha=0.5,color='red')
+            ax[0].plot(zs, at_qso, label=fr'$\alpha_{{\perp,\rm qso}}$',
+                       linestyle='dashed', alpha=0.5, color='red')
 
-            ax[0].plot(zs,ap_cross,label=fr'$\alpha_{{\parallel,\rm cross}}$',alpha=0.5,color='green')
-            ax[0].plot(zs,at_cross,label=fr'$\alpha_{{\perp,\rm cross}}$',linestyle='dashed',alpha=0.5,color='green')
+            ax[0].plot(zs, ap_cross, label=fr'$\alpha_{{\parallel,\rm cross}}$',
+                       alpha=0.5, color='green')
+            ax[0].plot(zs, at_cross, label=fr'$\alpha_{{\perp,\rm cross}}$',
+                       linestyle='dashed', alpha=0.5, color='green')
 
             #combined lya auto and lya-qso cross.
 
             ax[1].plot(zs,ap_comb,label=fr'$\alpha_{{\parallel}}$',alpha=0.5,color='darkblue')
-            ax[1].plot(zs,at_comb,label=fr'$\alpha_{{\perp}}$',linestyle='dashed',alpha=0.5,color='darkblue')
+            ax[1].plot(zs, at_comb, label=fr'$\alpha_{{\perp}}$',
+                       linestyle='dashed', alpha=0.5, color='darkblue')
 
             ax[1].scatter(zs_desi_sv,ap_desi_sv,
                        label=fr'$\alpha_\parallel$ DESI SV',color='grey',
@@ -302,7 +316,8 @@ class Plots:
 
     def plot_qso_lf(self):
         """
-        Plot the differential number counts dN/dm/deg^2 as a function of magnitude for Lya and tracer sources.
+        Plot the differential number counts dN/dm/deg^2 as a function of magnitude
+        for Lya and tracer sources.
 
         Uses ``self._survey``; stores the figure in ``self.fig``.
         """
@@ -370,7 +385,8 @@ class Plots:
 
     def plot_neff(self, neff):
         """
-        Plot effective number density for the Lya forest and discrete tracer as functions of magnitude.
+        Plot effective number density for the Lya forest and discrete tracer
+        as functions of magnitude.
 
         Parameters
         ----------
@@ -419,7 +435,8 @@ class Plots:
 
     def plot_survey_volume(self, volume, z_bin_centres):
         """
-        Plot effective survey volume as a function of redshift, overlaid with DESI SV reference points.
+        Plot effective survey volume as a function of redshift, overlaid with
+        DESI SV reference points.
 
         Parameters
         ----------
@@ -487,7 +504,8 @@ class Plots:
 
     def plot_veff(self, zbins, veff):
         """
-        Plot effective volume as a function of magnitude (per redshift bin) and as a function of redshift.
+        Plot effective volume as a function of magnitude (per redshift bin)
+        and as a function of redshift.
 
         Parameters
         ----------

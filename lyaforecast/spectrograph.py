@@ -69,7 +69,7 @@ class Spectrograph:
         fname = self._snr_file_dir.joinpath(
             f'snr-{self._band}{mag}-t{str(self._file_exp_time)}-nexp{self._file_num_exp}.dat')
 
-        print("reading magnitude {} in file {}".format(mag, fname))
+        print(f"reading magnitude {mag} in file {fname}")
         fname = check_file(fname)
 
         data = np.loadtxt(fname)
@@ -80,7 +80,7 @@ class Spectrograph:
             fname_other = self._snr_file_dir_other.joinpath(
                 f'snr-{self._band}{mag}-t{str(self._file_exp_time)}-nexp{self._file_num_exp}.dat')
 
-            print("reading magnitude {} in file {}".format(mag, fname_other))
+            print(f"reading magnitude {mag} in file {fname_other}")
             fname_other = check_file(fname_other)
 
             data_other = np.loadtxt(fname_other)

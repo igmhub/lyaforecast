@@ -1,4 +1,7 @@
-"""Class to handle results for each config. Includes BAO errors as a function of redshift, magnitude etc.."""
+"""Class to handle results for each config.
+
+Includes BAO errors as a function of redshift, magnitude etc.
+"""
 
 
 class Results:

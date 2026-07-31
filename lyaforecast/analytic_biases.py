@@ -20,7 +20,10 @@ class AnalyticBias:
             Cosmological model instance providing growth rate information.
         """
         self._cosmo = cosmo
-        self._growth_rate_func = interp1d(self._cosmo.z_bins,self._cosmo.growth_rate_zbins,kind='linear', bounds_error=False, fill_value='extrapolate')
+        self._growth_rate_func = interp1d(
+            self._cosmo.z_bins, self._cosmo.growth_rate_zbins,
+            kind='linear', bounds_error=False, fill_value='extrapolate'
+        )
         self._zref = self._cosmo.z_ref
         self._density_bias_func = dict()
 
