@@ -3,12 +3,23 @@ from lyaforecast.analytic_biases import AnalyticBias
 
 
 class PowerSpectrum:
-    """Class to store power spectra models.
-        Should only be used at the level of Fisher forecasts.
-        Uses CAMB to generate linear power, and McDonald (2003) for Lya stuff.
-        All units internally are in h/Mpc."""
+    """Model for 1D and 3D power spectra used in Fisher forecasts.
+
+    Uses CAMB for the linear matter power and McDonald (2003) analytic biases for the
+    Lya flux power. All units are internally in h/Mpc unless otherwise noted.
+    """
 
     def __init__(self, config, cosmo, spectrograph):
+        """
+        Parameters
+        ----------
+        config : configparser.ConfigParser
+            Parsed configuration object with a ``[power spectrum]`` section.
+        cosmo : CosmoCamb
+            Cosmological model instance.
+        spectrograph : dict or Spectrograph
+            Spectrograph instance(s) keyed by correlation name.
+        """
         # define cosmology class
         self._cosmo = cosmo
         self._spectrograph = spectrograph
@@ -39,7 +50,20 @@ class PowerSpectrum:
         self.dmu = np.diff(mu_edges)[0]
 
     def compute_linear_power_evol(self, z, k_hmpc):
-        """Scale linear power, assuming EdS scale with redshift"""
+        """Return the linear matter power scaled from z_ref to z using EdS growth.
+
+        Parameters
+        ----------
+        z : float
+            Target redshift (must be >= 1.8).
+        k_hmpc : float or array_like
+            Wavenumber in h/Mpc.
+
+        Returns
+        -------
+        ndarray
+            P_lin(z, k) in (Mpc/h)^3.
+        """
         if z < 1.8:
             print('Warning, going below z = 1.8 with EdS power scaling')
         if self._cosmo.z_ref < 1.8:
@@ -52,8 +76,26 @@ class PowerSpectrum:
         return pk_zref * eds
 
     def compute_p1d_kms(self, z, kp_kms, res_kms, pix_kms, corr):
-        """1D Lya power spectrum in observed coordinates,
-            smoothed with pixel width and resolution."""
+        """1D Lya power spectrum in observed (km/s) coordinates, smoothed by pixel and resolution.
+
+        Parameters
+        ----------
+        z : float
+            Redshift.
+        kp_kms : float or array_like
+            Line-of-sight wavenumber in s/km.
+        res_kms : float
+            Spectrograph resolution in km/s.
+        pix_kms : float
+            Pixel width in km/s.
+        corr : str
+            Correlation name used to select the spectrograph instance.
+
+        Returns
+        -------
+        ndarray
+            Smoothed P1D in (km/s) units.
+        """
         # get P1D before smoothing
         p1d_kms = self.compute_p1d_palanque2013(z, kp_kms)
         # smoothing (pixelization and resolution)
@@ -64,9 +106,28 @@ class PowerSpectrum:
         return p1d_kms
 
     def compute_p3d_kms_smooth(self, z, kt_deg, kp_kms, res_kms, pix_kms, corr):
-        """3D Lya power spectrum in observed coordinates.
-            Power smoothed with pixel width and resolution.
-            If self._linear=True, it will ignore small scale correction."""
+        """3D power spectrum in observed (deg, km/s) coordinates, smoothed by pixel and resolution.
+
+        Parameters
+        ----------
+        z : float
+            Redshift.
+        kt_deg : float or array_like
+            Transverse wavenumber in deg^{-1}.
+        kp_kms : float or array_like
+            Line-of-sight wavenumber in s/km.
+        res_kms : float
+            Spectrograph resolution in km/s.
+        pix_kms : float
+            Pixel width in km/s.
+        corr : str
+            Correlation name (e.g. 'lya_lya', 'lya_qso').
+
+        Returns
+        -------
+        ndarray
+            Smoothed P3D in deg^2 km/s units.
+        """
         # transform km/s to Mpc/h
         dkms_dhmpc = self._cosmo.velocity_from_distance(z)
         kp_hmpc = kp_kms * dkms_dhmpc
@@ -81,7 +142,6 @@ class PowerSpectrum:
         p3d_hmpc = self.compute_p3d_hmpc(z, k_hmpc, mu, corr)
         # convert power to observed units
         p3d_degkms = p3d_hmpc * dkms_dhmpc / dhmpc_ddeg**2
-        # convert resolution to kms
 
         # smoothing (pixelization and resolution)
         tracers = corr.split('_')
@@ -93,8 +153,24 @@ class PowerSpectrum:
         return p3d_degkms
 
     def compute_p3d_hmpc(self, z, k_hmpc, mu, corr):
-        """3D power spectrum P_F(z,k,mu).
-        If linear=True, it will ignore small scale correction."""
+        """3D flux power spectrum P_F(z, k, mu) in (Mpc/h)^3.
+
+        Parameters
+        ----------
+        z : float
+            Redshift.
+        k_hmpc : float or array_like
+            Wavenumber in h/Mpc.
+        mu : float or array_like
+            Cosine of the angle to the line of sight.
+        corr : str
+            Correlation name used to compute the bias.
+
+        Returns
+        -------
+        ndarray
+            P3D in (Mpc/h)^3.
+        """
         # get linear power at zrefs
         k = np.fmax(k_hmpc, self._k_min_hmpc)
         k = np.fmin(k, self._k_max_hmpc)
@@ -106,8 +182,28 @@ class PowerSpectrum:
         return pk_zref * b
 
     def compute_p3d_hmpc_smooth(self, z, k_hmpc, mu, pix_kms, res_kms, corr):
-        """Smooth power spectrum (convert to k space then back.)"""
+        """P3D in (Mpc/h)^3, smoothed via conversion to observed coordinates and back.
 
+        Parameters
+        ----------
+        z : float
+            Redshift.
+        k_hmpc : float or array_like
+            Wavenumber in h/Mpc.
+        mu : float or array_like
+            Cosine of the angle to the line of sight.
+        pix_kms : float
+            Pixel width in km/s.
+        res_kms : float
+            Spectrograph resolution in km/s.
+        corr : str
+            Correlation name.
+
+        Returns
+        -------
+        ndarray
+            Smoothed P3D in (Mpc/h)^3.
+        """
         # conversions
         dhmpc_ddeg = self._cosmo.distance_from_degrees(z)
         dkms_dhmpc = self._cosmo.velocity_from_distance(z)
@@ -132,8 +228,22 @@ class PowerSpectrum:
         return p3d_hmpc
 
     def compute_p1d_palanque2013(self, z, k_kms):
-        """Fitting formula for 1D P(z,k) from Palanque-Delabrouille et al. (2013).
-            Wavenumbers and power in units of km/s. Corrected to be flat at low-k"""
+        """Fitting formula for P1D(z, k) from Palanque-Delabrouille et al. (2013).
+
+        Corrected to be flat at low-k instead of going to zero.
+
+        Parameters
+        ----------
+        z : float
+            Redshift.
+        k_kms : float or array_like
+            Wavenumber in s/km.
+
+        Returns
+        -------
+        ndarray
+            1D Lya power spectrum in (km/s) units.
+        """
         # numbers from Palanque-Delabrouille (2013)
         A_F = 0.064
         n_F = -2.55
@@ -150,9 +260,25 @@ class PowerSpectrum:
         toret = np.pi * A_F / k0 * pow(k_kms/k0, exp1-1) * pow((1+z)/(1+z0), B_F)
         return toret
 
-    # currently un-used
     def compute_p1d_hmpc(self, z, k_hmpc, res_hmpc=None, pix_hmpc=None):
-        """Analytical P1D, in units of h/Mpc instead of km/s."""
+        """Analytical P1D in h/Mpc units (currently unused).
+
+        Parameters
+        ----------
+        z : float
+            Redshift.
+        k_hmpc : float or array_like
+            Wavenumber in h/Mpc.
+        res_hmpc : float, optional
+            Gaussian resolution scale in Mpc/h; applies exp(-k^2 res^2) smoothing.
+        pix_hmpc : float, optional
+            Pixel size in Mpc/h; applies sinc^2 smoothing.
+
+        Returns
+        -------
+        ndarray
+            P1D in (Mpc/h) units.
+        """
         # transform to km/s
         dkms_dhmpc = self._cosmo.velocity_from_distance(z)
         k_kms = k_hmpc / dkms_dhmpc

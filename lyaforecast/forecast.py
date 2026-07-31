@@ -1,6 +1,6 @@
-"""Control module for lyaforecast. Should be structured as follows: 
+"""Control module for lyaforecast. Should be structured as follows:
     -   we use Covariance class for each config, and store observed powers and INDIVIDUAL covariances in ?dictionaries?
-    - Then, using the Fisher class, we compute the parameter measurements 
+    - Then, using the Fisher class, we compute the parameter measurements
 
 """
 import configparser
@@ -21,51 +21,84 @@ from lyaforecast import (
 
 @dataclass
 class FlagStore:
+    """Flags controlling which power spectra are included in the forecast.
+
+    Parameters
+    ----------
+    lya_auto : bool
+        Include the Lya forest auto-correlation.
+    cross : bool
+        Include the Lya x discrete tracer cross-correlation.
+    tracer_auto : bool
+        Include the discrete tracer auto-correlation.
+    """
+
     lya_auto: bool
     cross: bool
     tracer_auto: bool
 
     @property
-    def include_tracer(self) -> bool:
-        """return array of bool for included tracers"""
+    def include_tracer(self):
+        """Return ordered list of booleans for [lya_auto, cross, tracer_auto].
+
+        Returns
+        -------
+        list of bool
+        """
         return list(asdict(self).values())
 
     @property
-    def is_3x2pt(self) -> bool:
-        """Return True if all flags are True."""
+    def is_3x2pt(self):
+        """Return True if all three correlation flags are enabled.
+
+        Returns
+        -------
+        bool
+        """
         return all(asdict(self).values())
 
 
-# Redirect print to logging
 class LoggerWriter:
+    """Redirect print statements to a Python logger."""
+
     def __init__(self, level):
+        """
+        Parameters
+        ----------
+        level : callable
+            Logger method to call for each non-empty message.
+        """
         self.level = level
 
     def write(self, message):
+        """Write a stripped message to the logger.
+
+        Parameters
+        ----------
+        message : str
+            Text to log; empty strings are silently ignored.
+        """
         message = message.strip()
         if message:
             self.level(message)
 
     def flush(self):
+        """No-op flush for compatibility with the file-like interface."""
         pass
 
 
 class Forecast:
-    """Main LyaForecast class.
-    ...outline...
-    """
-    # _survey_properties = None
-    # _spectro_properties = None
+    """Main entry point for running a BAO forecast from an ini configuration file."""
+
     _tracer_biases = None
 
     def __init__(self, cfg_path):
         """
         Parameters
         ----------
-        cfg_path : string
-            Path to main.ini config file
+        cfg_path : str
+            Path to the main .ini configuration file.
         """
-
         init_start_time = time.time()
 
         print('Initialise forecast')
@@ -125,30 +158,57 @@ class Forecast:
 
         self.reconstruction_factor = self.config['tracer'].getfloat('reconstruction factor', 1.0)
 
-        # init_end_time = time.time()
-        # print(f"Forecast initialized in {init_end_time - init_start_time:.4f} seconds.")
-
     @property
     def cosmo(self):
-        """Cosmological model instance."""
+        """Cosmological model instance.
+
+        Returns
+        -------
+        CosmoCamb
+        """
         return self._cosmo
 
     @property
     def survey(self):
-        """Survey description instance."""
+        """Survey description instance.
+
+        Returns
+        -------
+        Survey
+        """
         return self._survey
 
     @property
     def spectrograph(self):
-        """Spectrograph model instance."""
+        """Spectrograph model instance.
+
+        Returns
+        -------
+        Spectrograph
+        """
         return self._spectrograph
 
     @property
     def power_spectrum(self):
-        """Power spectrum model instance."""
+        """Power spectrum model instance.
+
+        Returns
+        -------
+        PowerSpectrum
+        """
         return self._power_spec
 
     def run_forecast(self):
+        """Run the BAO forecast over all redshift bins and return per-bin results.
+
+        Returns
+        -------
+        data : dict
+            Dictionary containing redshifts, sigma_at, sigma_ap, corr_coef arrays,
+            and combined sigma_at_full / sigma_ap_full.
+        fisher_input : dict
+            Per-bin diagnostics including Fisher matrices and cached power spectra.
+        """
         sigma_at = np.zeros(self._survey.num_z_bins)
         sigma_ap = np.zeros(self._survey.num_z_bins)
         corr_coef = np.zeros(self._survey.num_z_bins)
@@ -262,19 +322,17 @@ class Forecast:
         data = {}
         data["redshifts"] = self._survey.z_bin_centres
         data["mean redshift"] = self._cosmo.z_ref
-        # data["magnitudes"] = {self._survey.band: self._survey.maglist}
         data["sigma_at"] = sigma_at
         data["sigma_ap"] = sigma_ap
         data["corr_coef"] = corr_coef
         data["sigma_at_full"] = sigma_at_full
         data["sigma_ap_full"] = sigma_ap_full
-        # data
         self.data = data
 
         return data, fisher_input
 
     def _add_spectum_names(self):
-        # needs to be edited for more than one config
+        """Build human-readable spectrum labels from the active correlation flags."""
         if self.flags.lya_auto:
             lya_auto_name = f'lya({self._lya_tracer})_lya({self._lya_tracer})'
             self.spectrum_names['lya'] = lya_auto_name
@@ -286,12 +344,12 @@ class Forecast:
             self.spectrum_names['tracer auto'] = tracer_auto_name
 
     def add_tracer_biases(self, tracer_biases):
-        """Add tracer biases instance to forecast.
+        """Register per-redshift-bin tracer biases to override the analytic defaults.
 
         Parameters
         ----------
-        tracer_biases : TracerBiases
-            Instance of TracerBiases class.
+        tracer_biases : array_like
+            Sequence of bias values with length equal to ``survey.num_z_bins``.
         """
         assert len(tracer_biases) == self._survey.num_z_bins, (
             "Length of tracer_biases must match number of survey z bins."

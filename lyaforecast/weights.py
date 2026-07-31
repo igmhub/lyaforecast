@@ -1,15 +1,53 @@
-"""Class to handle computation of weights for various tracers"""
+"""Class to handle computation of weights for various tracers."""
 import numpy as np
 
 
 class Weights:
-    # OPTIONS = ['lya', 'qso']
+    """Compute optimal weights and noise integrals for Lya and discrete tracers.
+
+    Implements the weighting scheme of McDonald & Eisenstein (2007) to estimate
+    effective densities and noise powers as a function of magnitude.
+    """
 
     def __init__(
         self, config, maglist, cosmo, powerspec, spectrograph,
         forest_length, pixel_length, resolution, lambda_mean, z_bin, z_qso, zmin, zmax,
         lya_tracer=None, discrete_tracer=None
     ):
+        """
+        Parameters
+        ----------
+        config : configparser.ConfigParser
+            Parsed configuration object.
+        maglist : array_like
+            Grid of apparent magnitudes over which to integrate.
+        cosmo : CosmoCamb
+            Cosmological model instance.
+        powerspec : PowerSpectrum
+            Power spectrum model instance.
+        spectrograph : Spectrograph
+            Spectrograph noise model instance.
+        forest_length : float
+            Length of the Lya forest in km/s.
+        pixel_length : float
+            Pixel width in km/s.
+        resolution : float
+            Spectrograph resolution in km/s.
+        lambda_mean : float
+            Mean observed wavelength of the forest in Angstroms.
+        z_bin : float
+            Mean redshift of the current redshift bin.
+        z_qso : float
+            Central quasar redshift corresponding to the bin centre.
+        zmin : float
+            Minimum redshift of the bin.
+        zmax : float
+            Maximum redshift of the bin.
+        lya_tracer : Tracer, optional
+            Lya forest tracer (required for Lya integrals).
+        discrete_tracer : Tracer, optional
+            Discrete tracer (required for tracer density).
+        """
         self.weights = None
         self._config = config
         self.maglist = maglist
@@ -28,11 +66,15 @@ class Weights:
         self._lya_tracer = lya_tracer
         self._discrete_tracer = discrete_tracer
 
-        # get k values to evaluate p_w ,z,kt_deg,kp_kms,res_kms,pix_kms,whic
+        # get k values to evaluate p_w
         self._get_eval_mode()
 
     def _get_eval_mode(self):
-        """Mode at which to evaluate power spectrum PS in weighting (PS / PS + PN)"""
+        """Set the (kt, kp) evaluation point for signal/noise weighting.
+
+        The mode is chosen based on the ``measurement type`` config key:
+        'bao' uses large-scale modes (~0.035 h/Mpc); 'p1d' uses smaller scales (~0.1 h/Mpc).
+        """
         ACCEPTED_OPTIONS = ['bao', 'p1d']
         measurement_type = self._config['control'].get('measurement type')
         if measurement_type == 'bao':
@@ -45,13 +87,20 @@ class Weights:
             raise ValueError('measurement type must be chosen from:', ACCEPTED_OPTIONS)
 
     def compute_weights(self, corr):
-        """Compute weights as a function of magnitude.
-            We do it iteratively since the weights depend on I1, and
-            I1 depends on the weights."""
+        """Compute optimal Lya weights as a function of magnitude via iteration.
 
-        # Tracer is internally set, but just for posterity.
-        # assert which in self.OPTIONS, 'Tracer option invalid'
+        Iterates because weights depend on I1 and I1 depends on the weights.
 
+        Parameters
+        ----------
+        corr : str
+            Correlation name used to evaluate the 3D and 1D power spectra.
+
+        Returns
+        -------
+        ndarray
+            Optimal weights w(m) of shape (n_mag,).
+        """
         # pre-compute power spectra for weighting
         self._p3d_w = self._powerspec.compute_p3d_kms_smooth(
             self._z_bin, self.kt_w_deg, self.kp_w_kms, self._res_kms, self._pix_kms, corr)
@@ -60,12 +109,7 @@ class Weights:
             self._z_bin, self.kp_w_kms, self._res_kms, self._pix_kms, corr)
 
         # compute first weights using only 1D and noise variance
-        # if which == 'lya_lya':
         weights = self._initialise_weights_lya()
-        # self._compute_weights = self._compute_weights_lya
-        # elif which == 'qso':
-        #     self._compute_weights = self._compute_weights_qso
-        #     weights = self._initialise_weights_qso()
 
         num_iter = 3
         for i in range(num_iter):
@@ -74,8 +118,13 @@ class Weights:
         return weights
 
     def _initialise_weights_lya(self):
-        """Compute initial weights as a function of magnitude, using only
-            P1D and noise variance."""
+        """Compute initial Lya weights using only P1D and pixel noise variance.
+
+        Returns
+        -------
+        ndarray
+            Initial weights w(m) of shape (n_mag,).
+        """
         # noise pixel variance as a function of magnitude (dimensionless)
         noise_var = self._get_pix_var_m()
         # pixel variance from P1D (dimensionless)
@@ -85,9 +134,18 @@ class Weights:
         return weights
 
     def _compute_weights_lya(self, weights):
-        """Compute new weights as a function of magnitude, using P3D.
-            This version of computing the weights is closer to the one
-            described in McDonald & Eisenstein (2007)."""
+        """Update Lya weights using P3D as the signal term (McDonald & Eisenstein 2007).
+
+        Parameters
+        ----------
+        weights : ndarray
+            Current weights w(m) of shape (n_mag,).
+
+        Returns
+        -------
+        ndarray
+            Updated weights w(m) of shape (n_mag,).
+        """
         # 3D noise power as a function of magnitude
         noise_power = self._compute_noise_power_m(weights)
         # effective 3D density of quasars
@@ -96,26 +154,57 @@ class Weights:
         # 2D density of lines of sight (units of 1/deg^2)
         aliasing = int_2 / (int_1**2 * self._forest_length)
         # weights include aliasing as signal
-        signal_power = self._p3d_w  # + self._p1d_w * aliasing
+        signal_power = self._p3d_w
 
         weights = signal_power / (signal_power + noise_power)
 
         return weights
 
     def _initialise_weights_qso(self):
-        """Compute initial quasar weights as a function of magnitude."""
+        """Compute initial quasar (FKP) weights: uniform over magnitudes.
 
+        Returns
+        -------
+        ndarray
+            Initial weights of shape (n_mag,), all ones.
+        """
         return np.ones_like(self.maglist)
 
-    # We're not computing an effective density, just n_3d, but easier to do it in this module.
     def _compute_weights_qso(self, weights):
-        """FKP weighting of quasars."""
+        """FKP weighting of discrete tracers (quasars).
+
+        Parameters
+        ----------
+        weights : ndarray
+            Current weights w(m) of shape (n_mag,).
+
+        Returns
+        -------
+        ndarray
+            Updated FKP weights of shape (n_mag,).
+        """
         np_eff = self.compute_int_1(weights)
         weights = self._p3d_w / (self._p3d_w + 1 / np_eff)
 
         return weights
 
     def _get_dn_dkmsdm(self, z, m, tracer):
+        """Convert tracer dn/dzdm (deg^{-2}) to dn/d(km/s)dm.
+
+        Parameters
+        ----------
+        z : float
+            Redshift.
+        m : array_like
+            Apparent magnitudes.
+        tracer : Tracer
+            Tracer instance providing the dn/dzdm interpolator.
+
+        Returns
+        -------
+        ndarray
+            dn/d(km/s)/dm in (km/s)^{-1} deg^{-2} per unit magnitude.
+        """
         dkms_dz = self._cosmo.SPEED_LIGHT / (1 + z)
 
         # number density
@@ -126,16 +215,23 @@ class Weights:
         return dn_degkmsdm
 
     def compute_int_1(self, weights):
-        """Integral 1 in McDonald & Eisenstein (2007).
-            It represents an effective density of pixels, and it depends
-            on the current value of the weights, that in turn depend on I1.
-            We solve these iteratively (converges very fast)."""
+        """Compute integral I1 from McDonald & Eisenstein (2007): effective pixel density.
+
+        Parameters
+        ----------
+        weights : ndarray
+            Current weights w(m) of shape (n_mag,).
+
+        Returns
+        -------
+        ndarray
+            Cumulative I1(m) of shape (n_mag,) in deg^{-2} (km/s)^{-1}.
+        """
         assert self._lya_tracer is not None, "Lya tracer must be set to compute I1"
         # quasar number density
         dn_dmdegkms = self._get_dn_dkmsdm(self._zq, self.maglist, self._lya_tracer)
         dm = self.maglist[1] - self.maglist[0]
         integrand = dn_dmdegkms * weights * dm
-        # weighted density of quasars
 
         # move to using cumsum so we can plot as a function of magnitude
         int_1 = np.cumsum(integrand)
@@ -143,8 +239,18 @@ class Weights:
         return int_1
 
     def compute_int_2(self, weights):
-        """Integral 2 in McDonald & Eisenstein (2007).
-            It is used to set the level of aliasing."""
+        """Compute integral I2 from McDonald & Eisenstein (2007): aliasing normalisation.
+
+        Parameters
+        ----------
+        weights : ndarray
+            Current weights w(m) of shape (n_mag,).
+
+        Returns
+        -------
+        ndarray
+            Cumulative I2(m) of shape (n_mag,) in deg^{-2} (km/s)^{-1}.
+        """
         assert self._lya_tracer is not None, "Lya tracer must be set to compute I2"
         # quasar number density
         dn_dmdegkms = self._get_dn_dkmsdm(self._zq, self.maglist, self._lya_tracer)
@@ -155,8 +261,18 @@ class Weights:
         return int_2
 
     def compute_int_3(self, weights):
-        """Integral 3 in McDonald & Eisenstein (2007).
-            It is used to set the effective noise power."""
+        """Compute integral I3 from McDonald & Eisenstein (2007): effective noise power.
+
+        Parameters
+        ----------
+        weights : ndarray
+            Current weights w(m) of shape (n_mag,).
+
+        Returns
+        -------
+        ndarray
+            Cumulative I3(m) of shape (n_mag,) in noise variance units.
+        """
         assert self._lya_tracer is not None, "Lya tracer must be set to compute I3"
         # pixel noise variance (dimensionless)
         pixel_var = self._get_pix_var_m()
@@ -170,9 +286,18 @@ class Weights:
         return int_3
 
     def get_np_eff_lya(self, weights):
-        """Effective density of pixels in 1 / deg^2 km/s, n_p^eff in McDonald & Eisenstein (2007).
-            It is used in constructing the weights as a function of mag."""
-        # get effective density of pixels
+        """Compute effective 1D pixel density n_p^eff (McDonald & Eisenstein 2007).
+
+        Parameters
+        ----------
+        weights : ndarray
+            Current weights w(m) of shape (n_mag,).
+
+        Returns
+        -------
+        ndarray
+            Effective pixel density of shape (n_mag,) in deg^{-2} (km/s)^{-1}.
+        """
         int_1 = self.compute_int_1(weights)
         # number of pixels in a forest
         num_pix = self._forest_length / self._pix_kms
@@ -181,8 +306,18 @@ class Weights:
         return np_eff
 
     def get_n_tracer(self, tracer):
-        """Compute tracer density as a function of maximum magnitude"""
+        """Compute the cumulative tracer number density as a function of magnitude limit.
 
+        Parameters
+        ----------
+        tracer : Tracer
+            Discrete tracer whose dn/dzdm is integrated.
+
+        Returns
+        -------
+        ndarray
+            Cumulative n(< m) of shape (n_mag,) in deg^{-2} (km/s)^{-1}.
+        """
         mags = self.maglist
         dn_dkmsdm = self._get_dn_dkmsdm(self._z_bin, self.maglist, tracer)
         dm = mags[1] - mags[0]
@@ -191,6 +326,20 @@ class Weights:
         return dn_dkms
 
     def compute_tracer_weights(self, corr, tracer):
+        """Compute FKP-like weights for a discrete tracer.
+
+        Parameters
+        ----------
+        corr : str
+            Correlation name used to evaluate P3D.
+        tracer : Tracer
+            Discrete tracer instance.
+
+        Returns
+        -------
+        ndarray
+            Tracer weights w(m) of shape (n_mag,).
+        """
         p3d = self._powerspec.compute_p3d_kms_smooth(
             self._z_bin, self.kt_w_deg, self.kp_w_kms, self._res_kms, self._pix_kms, corr)
 
@@ -200,7 +349,13 @@ class Weights:
         return weights
 
     def _get_pix_var_m(self):
-        """Noise pixel variance as a function of magnitude (dimensionless)"""
+        """Return the pixel noise variance (dimensionless) as a function of magnitude.
+
+        Returns
+        -------
+        ndarray
+            Noise variance sigma_N^2(m) of shape (n_mag,).
+        """
         assert self._lya_tracer is not None, "Lya tracer must be set to compute pixel variance"
         # pixel width in angstroms
         pix_ang = self._pix_kms / self._cosmo.velocity_from_wavelength(self._z_bin)
@@ -215,10 +370,18 @@ class Weights:
         return noise_var
 
     def _compute_noise_power_m(self, weights):
-        """Effective noise power as a function of magnitude,
-            referred to as P_N(m) in McDonald & Eisenstein (2007).
-            Note this is a 3D power, not 1D, and it is used in 
-            constructing the weights as a function of magnitude."""
+        """Compute the 3D effective noise power P_N(m) (McDonald & Eisenstein 2007).
+
+        Parameters
+        ----------
+        weights : ndarray
+            Current weights w(m) of shape (n_mag,).
+
+        Returns
+        -------
+        ndarray
+            Effective 3D noise power of shape (n_mag,).
+        """
         # pixel noise variance (dimensionless)
         pixel_var = self._get_pix_var_m()
         # 3D effective density of pixels

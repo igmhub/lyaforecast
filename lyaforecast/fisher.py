@@ -4,7 +4,23 @@ import numpy as np
 
 
 class Fisher:
+    """Fisher matrix computation for BAO parameters alpha_parallel and alpha_transverse."""
+
     def __init__(self, power_spec, cosmo, number_modes, zbin_index=None, reconstruction_factor=1.0):
+        """
+        Parameters
+        ----------
+        power_spec : PowerSpectrum
+            Power spectrum model instance.
+        cosmo : CosmoCamb
+            Cosmological model instance.
+        number_modes : ndarray
+            Number of modes as a function of k for the current redshift bin.
+        zbin_index : int, optional
+            Index into the redshift bin arrays for growth factor retrieval.
+        reconstruction_factor : float, optional
+            BAO reconstruction factor applied to non-linear damping.
+        """
         self._power_spec = power_spec
         self._cosmo = cosmo
         self._num_modes = number_modes
@@ -19,22 +35,31 @@ class Fisher:
         self._derivatives = {}
 
     def compute_fisher(self, models, measurements, spectra_list):
-        """Compute fisher matrix for BAO componenets alpha_parallel and alpha_transverse"""
+        """Compute the 2x2 Fisher matrix for alpha_parallel and alpha_transverse.
+
+        Parameters
+        ----------
+        models : dict
+            Signal power spectra {corr_name: ndarray of shape (n_mu, n_k)}.
+        measurements : dict
+            Observed (signal + noise) power spectra {corr_name: ndarray of shape (n_mu, n_k)}.
+        spectra_list : list of str
+            Ordered list of correlation names included in the Fisher calculation.
+
+        Returns
+        -------
+        ndarray
+            Fisher matrix of shape (2, 2) for (alpha_parallel, alpha_transverse).
+        """
         fisher = np.zeros((2, 2))
-        # for a given mu work out fisher
-        # sum over k,mu.
-        # then do vectorised.
         for i, mu in enumerate(self._power_spec.mu):
             model_mu = np.stack([models[k][i, :] for k in models.keys()], axis=0)
             dmodel_dlk = self.compute_derivatives(model_mu, mu, spectra_list)
             pre_factor_mu = np.outer([mu**2, 1-mu**2], [mu**2, 1-mu**2])
 
             # measured power spectra
-            # build dictionary
             p_measured_dict = {label: measurements[label][i, :] for label in measurements.keys()}
 
-            # To-do: differentiate between labels used to compute C, and measured spectra that are acutally passed.
-            # Because cross-correlation needs both measured auto correlations
             p_measured_matrix, label_to_idx = self.gaussian_covariance_array_func(
                 p_measured_dict, spectra_list)
             M = np.moveaxis(p_measured_matrix, -1, 0)
@@ -48,32 +73,44 @@ class Fisher:
         return fisher
 
     def p_entry_from_label(self, spectra_dict, x, y):
-        """
-        Return P_tot array for tracer pair (x,y), handling symmetry.
+        """Return the observed power array for tracer pair (x, y), handling symmetry.
+
+        Parameters
+        ----------
+        spectra_dict : dict
+            Dictionary mapping correlation strings to power arrays.
+        x : str
+            Name of the first tracer.
+        y : str
+            Name of the second tracer.
+
+        Returns
+        -------
+        ndarray
+            Power spectrum array for the requested tracer pair.
         """
         key = f'{x}_{y}' if f'{x}_{y}' in spectra_dict else f'{y}_{x}'
         return spectra_dict[key]
 
     def gaussian_covariance_array_func(self, measured_power_spectra, labels):
-        """
-        Compute Gaussian covariance as a NumPy array using labels,
-        with helper function defined outside loops.
+        """Compute the Gaussian covariance matrix C_{AB}(k) for all correlation pairs.
 
         Parameters
         ----------
-        labels : dict
-            Strings like 'lya_lya', 'qso_qso', 'lya_qso'.
-        measured_power_spectra: dict
-            Keys are strings like above, Values are arrays of shape (N_k,)
+        measured_power_spectra : dict
+            Keys are strings like 'lya_lya', 'qso_qso', 'lya_qso'; values are arrays of shape (n_k,).
+        labels : list of str
+            Ordered list of correlation names defining the covariance matrix rows/columns.
 
         Returns
         -------
-        C_array : array, shape (N_spectra, N_spectra, N_k)
-        label_to_index : dict mapping label -> array index
+        C_array : ndarray
+            Covariance array of shape (n_spectra, n_spectra, n_k).
+        label_to_index : dict
+            Mapping from correlation label to its row/column index.
         """
-        # labels = list(spectra_dict.keys())
         N_spectra = len(labels)
-        N_k = self._power_spec.k.size  # next(iter(spectra_dict.values())).shape[0]
+        N_k = self._power_spec.k.size
 
         label_to_index = {label: i for i, label in enumerate(labels)}
         label_pairs = {label: tuple(label.split('_')) for label in labels}
@@ -95,25 +132,27 @@ class Fisher:
         return C_array, label_to_index
 
     def compute_derivatives(self, model, mu, spectra_list):
-        """Return the differential of the a peak power spectrum component,
-            with respect to log k for a single value of mu. Also add BAO peak broadening."""
-        # i.e.
-        # k = sqrt( kp**2 + kt**2)
-        # k'  = sqrt( ap**2*k**2*mu2 + at**2*k**2*(1-mu2))
-        # k' = k*sqrt( ap**2*mu2 + at**2*(1-mu2))
-        # dk/dap         = mu2 * k
-        # dlog(k)/dap    = mu2
-        # dlog(k)/dat    = (1-mu2)
-        # dmodel/dap     = dmodel/dlog(k)*dlog(k)/dap    = dmodeldlk * mu2
-        # dmodel/dat     = dmodel/dlog(k)*dlog(k)/dat    = dmodeldlk * (1-mu2)
+        """Compute dP/d(log k) for the BAO peak component, with non-linear damping applied.
 
+        Parameters
+        ----------
+        model : ndarray
+            Signal power spectra stacked over correlations, shape (n_corr, n_k).
+        mu : float
+            Cosine of the angle to the line of sight for this mu slice.
+        spectra_list : list of str
+            Ordered list of correlation names matching the model rows.
+
+        Returns
+        -------
+        ndarray
+            Derivatives dP_peak/d(log k) of shape (n_corr, n_k).
+        """
         # Get P(k) for this μ
         pk = self._get_p_pk(model)
 
         # Apply peak smoothing
         for i, name in enumerate(spectra_list):
-            # if name == 'lya_lya':
-            #     pk[i] *= self._get_peak_smoothing(mu, self.zbin_index)
             if 'lya' not in name:
                 pk[i] *= self._get_peak_smoothing(
                     mu, self.zbin_index, reconstruction_factor=self._reconstruction_factor)
@@ -127,7 +166,18 @@ class Fisher:
         return dmodel_dlk
 
     def _get_p_pk(self, model):
-        """Get peak-only component of linear matter power for multiple models (N, 500)."""
+        """Extract the BAO peak component by subtracting a smooth polynomial fit.
+
+        Parameters
+        ----------
+        model : ndarray
+            Signal power spectra, shape (n_corr, n_k).
+
+        Returns
+        -------
+        ndarray
+            Peak-only component of shape (n_corr, n_k).
+        """
         x = self._power_spec.logk
         x = x - np.mean(x)
         x = x / (np.max(x) - np.min(x))
@@ -135,7 +185,7 @@ class Fisher:
         w[:3] *= 1.e8
 
         pk_list = []
-        for row in model:  # loop over N models (shape (500,))
+        for row in model:
             sign = np.sign(row)
             y = np.log(np.abs(row)+1e-12)
             coef = np.polyfit(x, y, 8, w=w)
@@ -147,7 +197,22 @@ class Fisher:
         return np.vstack(pk_list)
 
     def _get_peak_smoothing(self, mu, zbin_index, reconstruction_factor=1):
-        """Apply non-linear smoothing to BAO peak model"""
+        """Return the non-linear BAO damping envelope (Eisenstein, Seo & White 2007, Eq. 12).
+
+        Parameters
+        ----------
+        mu : float
+            Cosine of the angle to the line of sight.
+        zbin_index : int or None
+            Index into the redshift bin arrays; if None, uses z_ref growth rate.
+        reconstruction_factor : float, optional
+            Factor reducing non-linear damping (1 = no reconstruction, >1 = partial).
+
+        Returns
+        -------
+        ndarray
+            Gaussian damping envelope of shape (n_k,).
+        """
         kp = mu * self._power_spec.k
         kt = np.sqrt(1-mu**2) * self._power_spec.k
 
@@ -170,7 +235,24 @@ class Fisher:
 
     @staticmethod
     def print_bao(fisher_matrix, which='result'):
-        """Print BAO results from Fisher matrix"""
+        """Invert the Fisher matrix and print the BAO parameter uncertainties.
+
+        Parameters
+        ----------
+        fisher_matrix : ndarray
+            2x2 Fisher matrix for (alpha_parallel, alpha_transverse).
+        which : str, optional
+            Label printed alongside the results.
+
+        Returns
+        -------
+        sigma_dh : float
+            Uncertainty on alpha_parallel (line-of-sight BAO).
+        sigma_da : float
+            Uncertainty on alpha_transverse (angular BAO).
+        corr_coef : float
+            Correlation coefficient between sigma_dh and sigma_da.
+        """
         cov = np.linalg.inv(fisher_matrix)
         sigma_dh = np.sqrt(cov[0, 0])
         sigma_da = np.sqrt(cov[1, 1])

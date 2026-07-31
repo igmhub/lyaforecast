@@ -4,14 +4,16 @@ import numpy as np
 from scipy.ndimage import gaussian_filter1d
 
 class Plots:
-    def __init__(self,forecast=None,data=None):
+    def __init__(self, forecast=None, data=None):
         """
-        Initialize Plots instance with configuration and survey details.
+        Initialize Plots with an optional forecast pipeline and precomputed data.
 
         Parameters
         ----------
-        survey : Survey
-            Instance of Survey class containing survey properties.
+        forecast : Forecast, optional
+            Forecast instance providing survey, covariance, power spectrum, and cosmology.
+        data : dict, optional
+            Precomputed results dict (e.g. from ``Forecast.run_forecast``).
         """
         
         self._forecast = forecast
@@ -25,6 +27,11 @@ class Plots:
             self._data = data
 
     def plot_da_h_m(self):
+        """
+        Plot BAO parameter errors (alpha_parallel, alpha_perp) as a function of magnitude limit.
+
+        Uses ``self._data`` and ``self._survey``; stores the figure in ``self.fig``.
+        """
         ap_lya = self._data['ap_err_lya_m'] * 100
         at_lya = self._data['at_err_lya_m'] * 100
         ap_qso = self._data['ap_err_qso_m'] * 100
@@ -53,6 +60,11 @@ class Plots:
             self.fig = fig
 
     def plot_da_h_z(self):
+        """
+        Plot BAO parameter errors per redshift bin for individual correlations and their combination.
+
+        Uses ``self._data``; stores the figure in ``self.fig``.
+        """
         ap_lya = self._data['ap_err_lya_z'] * 100
         at_lya = self._data['at_err_lya_z'] * 100
         ap_qso = self._data['ap_err_qso_z'] * 100
@@ -112,8 +124,18 @@ class Plots:
 
             self.fig = fig
 
-    def plot_pk_z(self,z_bins,info):
+    def plot_pk_z(self, z_bins, info):
+        """
+        Plot kP(k, mu)/pi for Lya and quasar tracers at a fixed mu slice across redshift bins.
 
+        Parameters
+        ----------
+        z_bins : array-like
+            Redshift bin centres.
+        info : dict
+            Dict with keys ``p_lya``, ``p_qso``, ``var_lya``, ``var_qso``
+            (shapes ``[n_z, n_k, n_mu]``).
+        """
         p_lya = info['p_lya']
         p_qso = info['p_qso']
         var_lya = info['var_lya']
@@ -150,8 +172,18 @@ class Plots:
             
             self.fig = fig
 
-    def plot_var_pk_z(self,z_bins,info):
+    def plot_var_pk_z(self, z_bins, info):
+        """
+        Plot power spectrum variance as a function of k (fixed mu) and z (fixed k) for Lya and QSO.
 
+        Parameters
+        ----------
+        z_bins : array-like
+            Redshift bin centres.
+        info : dict
+            Dict with keys ``p_lya``, ``p_qso``, ``var_lya``, ``var_qso``
+            (shapes ``[n_z, n_k, n_mu]``).
+        """
         var_lya = info['var_lya']
         var_qso = info['var_qso']
         p_lya = info['p_lya']
@@ -209,8 +241,20 @@ class Plots:
             
             self.fig = fig
 
-    def plot_n_pk_z(self,zbs,n_p3d_z_lya,n_p3d_z_qso):
-        with self._make_style()[0], self._make_style()[1]: 
+    def plot_n_pk_z(self, zbs, n_p3d_z_lya, n_p3d_z_qso):
+        """
+        Plot nbar * P3D at a reference (k, mu) as a function of redshift for Lya and QSO.
+
+        Parameters
+        ----------
+        zbs : array-like
+            Redshift bin centres.
+        n_p3d_z_lya : array-like
+            nbar * P3D values for the Lya tracer per redshift bin.
+        n_p3d_z_qso : array-like
+            nbar * P3D values for the QSO tracer per redshift bin.
+        """
+        with self._make_style()[0], self._make_style()[1]:
             fig,ax = plt.subplots(1,1,figsize=(10,6))
 
             # desi_sv_z = [1.65,1.75,1.85,1.95,2.05]
@@ -230,7 +274,13 @@ class Plots:
             self.fig = fig
 
     def plot_var_p3d_m(self):
-        with self._make_style()[0], self._make_style()[1]: 
+        """
+        Plot P3D variance as a function of k for the brightest and faintest magnitude limits.
+
+        Uses ``self.p3d``, ``self.var_p3d``, ``self._covariance``, and ``self._survey``;
+        stores the figure in ``self.fig``.
+        """
+        with self._make_style()[0], self._make_style()[1]:
             fig,ax = plt.subplots(1,1,figsize=(10,6))
             ax.set_xlabel(fr'k')
             ax.set_ylabel(f'var[P(k)]')
@@ -251,8 +301,12 @@ class Plots:
             self.fig = fig
 
     def plot_qso_lf(self):
-        
-        with self._make_style()[0], self._make_style()[1]: 
+        """
+        Plot the differential number counts dN/dm/deg^2 as a function of magnitude for Lya and tracer sources.
+
+        Uses ``self._survey``; stores the figure in ``self.fig``.
+        """
+        with self._make_style()[0], self._make_style()[1]:
             fig,ax = plt.subplots(1,1,figsize=(12,7))
 
             # get limits, for now fix this
@@ -314,8 +368,17 @@ class Plots:
 
             self.fig = fig
 
-    def plot_neff(self,neff):
-        with self._make_style()[0], self._make_style()[1]: 
+    def plot_neff(self, neff):
+        """
+        Plot effective number density for the Lya forest and discrete tracer as functions of magnitude.
+
+        Parameters
+        ----------
+        neff : dict
+            Dict with keys ``'lya'``, ``'tracer'``, and ``'bin_lengths'``; each value is
+            an array indexed by ``[z_bin, mag_bin]``.
+        """
+        with self._make_style()[0], self._make_style()[1]:
             fig,ax = plt.subplots(1,2,figsize=(20,6))
             lim = 20
             w = self._survey.maglist > lim
@@ -354,8 +417,18 @@ class Plots:
 
             self.fig = fig
 
-    def plot_survey_volume(self,volume,z_bin_centres):
-        with self._make_style()[0], self._make_style()[1]: 
+    def plot_survey_volume(self, volume, z_bin_centres):
+        """
+        Plot effective survey volume as a function of redshift, overlaid with DESI SV reference points.
+
+        Parameters
+        ----------
+        volume : array-like
+            Effective volume in (Mpc/h)^3 per redshift bin.
+        z_bin_centres : array-like
+            Redshift bin centres corresponding to ``volume``.
+        """
+        with self._make_style()[0], self._make_style()[1]:
             fig,ax = plt.subplots(1,1,figsize=(8,6))
             ax.plot(z_bin_centres,volume/1e9,label='Forecast')
 
@@ -372,8 +445,19 @@ class Plots:
 
             self.fig = fig
 
-    def plot_weights(self,weights,zbins):
-        with self._make_style()[0], self._make_style()[1]: 
+    def plot_weights(self, weights, zbins):
+        """
+        Plot McDonald & Eisenstein (2007) optimal weights as a function of magnitude and redshift.
+
+        Parameters
+        ----------
+        weights : dict
+            Dict with keys ``'lya'`` and ``'tracer'``; each value is an array of shape
+            ``[n_z, n_mag]``.
+        zbins : array-like
+            Redshift bin centres.
+        """
+        with self._make_style()[0], self._make_style()[1]:
             fig,ax = plt.subplots(1,2,figsize=(15,6))
             for i,zbc in enumerate(zbins):
                 ax[0].plot(self._survey.maglist,weights['lya'][i],label=f'z={zbc}')
@@ -401,8 +485,18 @@ class Plots:
 
             self.fig = fig
 
-    def plot_veff(self,zbins,veff):
-        with self._make_style()[0], self._make_style()[1]: 
+    def plot_veff(self, zbins, veff):
+        """
+        Plot effective volume as a function of magnitude (per redshift bin) and as a function of redshift.
+
+        Parameters
+        ----------
+        zbins : array-like
+            Redshift bin centres.
+        veff : ndarray
+            Effective volume array of shape ``[n_z, n_mag]`` in (km/s * deg)^2 units.
+        """
+        with self._make_style()[0], self._make_style()[1]:
             fig,ax = plt.subplots(1,2,figsize=(18,6))
             for i,zbc in enumerate(self._survey.z_bin_centres):
                 ax[0].plot(self._survey.maglist,veff[i]/1e9,label=f'z={zbc}')
@@ -427,6 +521,12 @@ class Plots:
 
 
     def plot_snr_per_ang(self):
+        """
+        Plot SNR per Angstrom as a function of observed wavelength for several magnitude values.
+
+        Uses ``self._forecast.spectrograph``; stores the figure in ``self.fig``.
+        Currently designed for the DESIQSO spectrograph only.
+        """
         #this is inflexible at the moment - only designed to run with DESIQSO spectro.
         with self._make_style()[0], self._make_style()[1]:
             fig,ax = plt.subplots(1,1,figsize=(10,6))
@@ -473,8 +573,23 @@ class Plots:
         
             self.fig = fig
 
-    def _make_style(self,style='seaborn-1'):
-        """Apply a Seaborn style with additional customizations."""
+    def _make_style(self, style='seaborn-1'):
+        """
+        Build a pair of matplotlib context managers for consistent plot styling.
+
+        Parameters
+        ----------
+        style : str, optional
+            Named style preset: ``'seaborn-1'`` (default), ``'seaborn-2'``, ``'ggplot'``,
+            or ``'classic'``.
+
+        Returns
+        -------
+        base_ctx : context manager
+            ``plt.style.context`` for the selected base style.
+        rc_ctx : context manager
+            ``plt.rc_context`` with journal-quality font and size overrides.
+        """
         # Define built-in styles (Seaborn, ggplot, etc.)
         base_styles = {
             "seaborn-1": "seaborn-v0_8-notebook",  # Seaborn notebook style
