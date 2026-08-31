@@ -345,6 +345,8 @@ class NewForecast:
 
         data = {}
         data["redshifts"] = self._survey.z_bin_centres
+        assert(np.all(np.abs(self._survey.z_bin_edges[0][1:]-self._survey.z_bin_edges[1][:-1])<0.0001))
+        data["zedges"]    = np.append(self._survey.z_bin_edges[0],self._survey.z_bin_edges[1][-1])
         data["fiducial redshift"] = self._cosmo.z_ref
 
         for corr in self.correlations.keys():
