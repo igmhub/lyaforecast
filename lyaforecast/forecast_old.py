@@ -1,5 +1,6 @@
 """Control module for lyaforecast. Should be structured as follows: 
-    -   we use Covariance class for each config, and store observed powers and INDIVIDUAL covariances in ?dictionaries?
+    -   we use Covariance class for each config, and store observed powers and
+        INDIVIDUAL covariances in ?dictionaries?
     - Then, using the Fisher class, we compute the parameter measurements 
 
 """
@@ -136,8 +137,14 @@ class Forecast:
             self.covariance(lmin, lmax)
             self.covariance.compute_eff_density_and_noise()
 
-            eff_vol_lya[iz] = self.covariance._compute_lya_eff_vol(0.14, 0.6) / self.covariance.get_survey_volume()
-            eff_vol_tr[iz] = self.covariance._compute_tracer_eff_vol(0.14, 0.6) / self.covariance.get_survey_volume()
+            eff_vol_lya[iz] = (
+                self.covariance._compute_lya_eff_vol(0.14, 0.6)
+                / self.covariance.get_survey_volume()
+            )
+            eff_vol_tr[iz] = (
+                self.covariance._compute_tracer_eff_vol(0.14, 0.6)
+                / self.covariance.get_survey_volume()
+            )
 
         eff_vols['lya'] = eff_vol_lya
         eff_vols['tracer'] = eff_vol_tr
@@ -148,7 +155,9 @@ class Forecast:
 
     def _get_z_bins(self):
         if self.config['survey'].get('z bin centres', None) is not None:
-            z_bin_centres = np.array(self.config['survey'].get('z bin centres').split(",")).astype(float)
+            z_bin_centres = np.array(
+                self.config['survey'].get('z bin centres').split(",")
+            ).astype(float)
             dz = np.zeros(z_bin_centres.size)
             dz[1:-1] = (z_bin_centres[2:] - z_bin_centres[:-2]) / 2.
             dz[0] = z_bin_centres[1] - z_bin_centres[0]
@@ -156,7 +165,9 @@ class Forecast:
             z_bin_edges = np.array([z_bin_centres - dz / 2, z_bin_centres + dz / 2])
         else:
             z_list = np.linspace(self.survey.zmin, self.survey.zmax, self.survey.num_z_bins + 1)
-            z_bin_edges = np.array([[z_list[i], z_list[i + 1]] for i in range(self.survey.num_z_bins)]).T
+            z_bin_edges = np.array(
+                [[z_list[i], z_list[i + 1]] for i in range(self.survey.num_z_bins)]
+            ).T
             z_bin_centres = z_bin_edges.mean(axis=0)
 
         return z_bin_edges, z_bin_centres
@@ -299,8 +310,12 @@ class Forecast:
             sigma_da_tracer = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
             sigma_dh_cross = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
             sigma_da_cross = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-            sigma_dh_lya_lya_lya_tracer = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
-            sigma_da_lya_lya_lya_tracer = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
+            sigma_dh_lya_lya_lya_tracer = np.zeros(
+                (self.survey.num_z_bins, self.survey.num_mag_bins)
+            )
+            sigma_da_lya_lya_lya_tracer = np.zeros(
+                (self.survey.num_z_bins, self.survey.num_mag_bins)
+            )
             corr_coef = np.zeros((self.survey.num_z_bins, self.survey.num_mag_bins))
         else:
             sigma_da_lya = np.zeros(self.survey.num_z_bins)
@@ -381,9 +396,15 @@ class Forecast:
                 fisher_matrix_cross += self.get_fisher(mu,dp3d_cross_dlogk,p3d_cross_var)
             
 
-            sigma_dh_lya_z, sigma_da_lya_z, corr_coef_lya_z = self.print_bao(fisher_matrix_lya,'lya')
-            sigma_dh_tracer_z, sigma_da_tracer_z, corr_coef_tracer_z = self.print_bao(fisher_matrix_tracer,self._tracer)
-            sigma_dh_cross_z, sigma_da_cross_z, corr_coef_cross_z = self.print_bao(fisher_matrix_cross,'cross')
+            sigma_dh_lya_z, sigma_da_lya_z, corr_coef_lya_z = self.print_bao(
+                fisher_matrix_lya, 'lya'
+            )
+            sigma_dh_tracer_z, sigma_da_tracer_z, corr_coef_tracer_z = self.print_bao(
+                fisher_matrix_tracer, self._tracer
+            )
+            sigma_dh_cross_z, sigma_da_cross_z, corr_coef_cross_z = self.print_bao(
+                fisher_matrix_cross, 'cross'
+            )
 
             sigma_dh_lya[iz] = sigma_dh_lya_z
             sigma_da_lya[iz] = sigma_da_lya_z
@@ -397,10 +418,17 @@ class Forecast:
 
             bao_corr_coef = 0
             
-            sigma_da_lya_lya_lya_tracer[iz] = self.combine_BAO(sigma_da_lya_z,sigma_da_cross_z,bao_corr_coef)
-            sigma_dh_lya_lya_lya_tracer[iz] = self.combine_BAO(sigma_dh_lya_z,sigma_dh_cross_z,bao_corr_coef)
+            sigma_da_lya_lya_lya_tracer[iz] = self.combine_BAO(
+                sigma_da_lya_z, sigma_da_cross_z, bao_corr_coef
+            )
+            sigma_dh_lya_lya_lya_tracer[iz] = self.combine_BAO(
+                sigma_dh_lya_z, sigma_dh_cross_z, bao_corr_coef
+            )
 
-            print(f'at (lyaxlya + lyax{self._tracer}): {sigma_da_lya_lya_lya_tracer[iz]}, ap (lyaxlya + lyax{self._tracer}): {sigma_dh_lya_lya_lya_tracer[iz]}')
+            print(
+                f'at (lyaxlya + lyax{self._tracer}): {sigma_da_lya_lya_lya_tracer[iz]}, '
+                f'ap (lyaxlya + lyax{self._tracer}): {sigma_dh_lya_lya_lya_tracer[iz]}'
+            )
         
         
         if self.covariance.per_mag:
@@ -559,7 +587,8 @@ class Forecast:
 
     def combine_BAO(self,dx1, dx2, rho):
         """
-        Combine two BAO measurements (centred at 1) from different tracers, with correlation coefficient rho. This is a high noise approximation, 
+        Combine two BAO measurements (centred at 1) from different tracers,
+        with correlation coefficient rho. This is a high noise approximation,
         to be replaced by a full Fisher covariance matrix.
         
         Returns:

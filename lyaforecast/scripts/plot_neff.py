@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-"""Plot effective densities of measurements. For Lya it's the 2D effective density defined by McQuinn and White 2011. For tracers it's just the 3D density."""
+"""Plot effective densities of measurements.
+
+For Lya it's the 2D effective density defined by McQuinn and White 2011.
+For tracers it's just the 3D density.
+"""
 
 import argparse
 from lyaforecast import Forecast
@@ -62,11 +66,17 @@ def from_script(args):
 
             ne_i = (neff['lya'][i][w]) / forecast.cosmo.distance_from_degrees(zbc)**2 
                            # * neff['bin_lengths'][i])
-            n_i_tr = (neff['tracer'][i][w]) / forecast.cosmo.distance_from_degrees(zbc)**2 * forecast.cosmo.velocity_from_distance(zbc)
+            n_i_tr = (
+                (neff['tracer'][i][w])
+                / forecast.cosmo.distance_from_degrees(zbc)**2
+                * forecast.cosmo.velocity_from_distance(zbc)
+            )
                            # * neff['bin_lengths'][i])
 
-            ax[0].plot(forecast.survey.maglist[w],ne_i,color=colours[j],label=lab_lya,linestyle=linestyles[i])
-            ax[1].plot(forecast.survey.maglist[w],n_i_tr,color=colours[j],label=lab_tr,linestyle=linestyles[i])
+            ax[0].plot(forecast.survey.maglist[w], ne_i,
+                       color=colours[j], label=lab_lya, linestyle=linestyles[i])
+            ax[1].plot(forecast.survey.maglist[w], n_i_tr,
+                       color=colours[j], label=lab_tr, linestyle=linestyles[i])
 
         ax[0].legend(loc='lower right',fontsize=15)
         ax[1].legend(loc=2,fontsize=15)

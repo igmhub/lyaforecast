@@ -9,15 +9,23 @@ import mcfit
 
 
 def check_file(input_path):
-    """ Verify a file exists, if not raise error
+    """Verify a file exists and return it, raising an error otherwise.
 
     Parameters
     ----------
-    path : string
-        Input path. Only absolute.
+    input_path : Path
+        Absolute path to the file to check.
 
+    Returns
+    -------
+    Path
+        The same path if it exists.
+
+    Raises
+    ------
+    RuntimeError
+        If the path does not point to an existing file.
     """
-    # First check if it's an absolute path
     if input_path.is_file():
         return input_path
     else:
@@ -25,14 +33,25 @@ def check_file(input_path):
 
 
 def get_file(path):
-    """ Find files on the system.
+    """Resolve a file path, searching the lyaforecast resource directories.
 
-    Checks if it's an absolute or relative path inside LyaCast
+    Checks in order: absolute path, resources/, resources/data/,
+    resources/default_configs/, resources/camb_configs/.
 
     Parameters
     ----------
-    path : string
-        Input path. Can be absolute or relative to lyacast
+    path : str
+        Input path; can be absolute or relative to the lyaforecast package.
+
+    Returns
+    -------
+    Path
+        Resolved absolute path to the file.
+
+    Raises
+    ------
+    RuntimeError
+        If the file cannot be found in any search location.
     """
     input_path = Path(os.path.expandvars(path))
 
@@ -66,14 +85,24 @@ def get_file(path):
 
 
 def get_dir(path):
-    """ Find directory on the system.
+    """Resolve a directory path, searching the lyaforecast resource directories.
 
-    Checks if it's an absolute or relative path inside LyaCast
+    Checks in order: absolute path, resources/, resources/data/.
 
     Parameters
     ----------
-    path : string
-        Input path. Can be absolute or relative to lyacast
+    path : str
+        Input path; can be absolute or relative to the lyaforecast package.
+
+    Returns
+    -------
+    Path
+        Resolved absolute path to the directory.
+
+    Raises
+    ------
+    RuntimeError
+        If the directory cannot be found in any search location.
     """
     input_path = Path(os.path.expandvars(path))
 
@@ -98,6 +127,18 @@ def get_dir(path):
 
 
 def setup_logger(out_folder):
+    """Create and configure a logger that writes to both a file and the console.
+
+    Parameters
+    ----------
+    out_folder : str or Path
+        Directory where the ``forecast.log`` file will be written.
+
+    Returns
+    -------
+    logging.Logger
+        Configured logger instance.
+    """
     logger = logging.getLogger(__name__)
     logging.basicConfig(
         level=logging.INFO,

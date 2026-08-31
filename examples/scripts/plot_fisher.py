@@ -5,10 +5,10 @@ import decimal
 import argparse
 
 def z_str(z):
-    return "{:.3g}".format(decimal.Decimal(z))
+    return f"{decimal.Decimal(z):.3g}"
 
 def mu_str(mu):
-    return "{:.2g}".format(decimal.Decimal(mu))
+    return f"{decimal.Decimal(mu):.2g}"
 
 parser=argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,description="""Plot P3D signal-to-noise""")
 parser.add_argument('--snr-files', type=str, nargs= "*", required=True, help="list of input snr filenames, like data/sn-spec-lya-20180907-r22-t4000-nexp4.dat")

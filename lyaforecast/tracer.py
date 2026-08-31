@@ -9,9 +9,17 @@ CONTINUOUS_TRACERS = ['lya']
 
 
 class Tracer:
+    """Tracer description holding the dn/dzdm distribution and bias information."""
+
     background_tracer = None
 
     def __init__(self, config):
+        """
+        Parameters
+        ----------
+        config : configparser.SectionProxy
+            Configuration section for this tracer.
+        """
         self.config = config
         self.simple_name = config.get('tracer')
         self.type = config.get('tracer_type')
@@ -49,10 +57,26 @@ class Tracer:
             bias_val = np.array([float(val) for val in bias_val_str.split(" ")])
             print("bias z=",bias_z)
             print("bias val=",bias_val)
-            self.bias_func = interp1d(bias_z,bias_val,kind='linear', bounds_error=False, fill_value='extrapolate')
-
+            self.bias_func = interp1d(
+                bias_z, bias_val, kind='linear',
+                bounds_error=False, fill_value='extrapolate'
+            )
 
     def get_dn_dzdm(self, z, m):
+        """Return the tracer number density per unit redshift and magnitude.
+
+        Parameters
+        ----------
+        z : float or array_like
+            Redshift.
+        m : float or array_like
+            Apparent magnitude (same shape as z for non-grid evaluation).
+
+        Returns
+        -------
+        ndarray
+            dn/dzdm in deg^{-2} per unit z per unit magnitude.
+        """
         points = self._tracer_dndz(z, m, grid=False)
         points[m > self._mmax] = 1e-20
         points[m < self._mmin] = 1e-20
@@ -60,12 +84,26 @@ class Tracer:
         return points
 
     def init_discrete_tracer(self, tracer_dzdz_file):
+        """Initialise the dn/dzdm interpolator for a discrete (galaxy/quasar) tracer.
+
+        Parameters
+        ----------
+        tracer_dzdz_file : Path
+            Path to the flat text file containing (z, m, dn/dzdm/deg^2) columns.
+        """
         if self.simple_name not in TRACER_OPTIONS:
             raise ValueError(f'Unknown discrete tracer: {self.simple_name}')
 
         self._tracer_dndz = self._setup_dndzdm_tracer(tracer_dzdz_file)
 
     def init_continuous_tracer(self, tracer_dzdz_file):
+        """Initialise the dn/dzdm interpolator for a continuous (Lya forest) tracer.
+
+        Parameters
+        ----------
+        tracer_dzdz_file : Path
+            Path to the flat text file containing (z, m, dn/dzdm/deg^2) columns.
+        """
         if self.simple_name not in CONTINUOUS_TRACERS:
             raise ValueError(f'Unknown continuous tracer: {self.simple_name}')
 
@@ -87,26 +125,36 @@ class Tracer:
         self._tracer_dndz = self._setup_dndzdm_lya(tracer_dzdz_file)
 
     def _setup_dndzdm_lya(self, file):
-        """Setup dndz/dm from file"""
+        """Build a bivariate spline interpolator for Lya background-source dn/dzdm.
 
+        Parameters
+        ----------
+        file : Path
+            Text file with columns (z, m, dn/dzdm/deg^2).
+
+        Returns
+        -------
+        RectBivariateSpline
+            Interpolator for dn/dzdm in deg^{-2} per unit z per unit magnitude.
+        """
         z, m, tdNdmdzddeg2 = np.loadtxt(file, unpack=True)
 
         if self.mag_min is not None :
-            print("Enforcing m>={}".format(self.mag_min))
+            print(f"Enforcing m>={self.mag_min}")
             tdNdmdzddeg2 *= (m>=self.mag_min)
 
         if self.mag_max is not None :
-            print("Enforcing m<={}".format(self.mag_max))
+            print(f"Enforcing m<={self.mag_max}")
             tdNdmdzddeg2 *= (m<=self.mag_max)
-
-
 
         # scale density of quasars to desired number. By default given staright from QLF
         if self.tracer_density is not None:
             z_min_lya = 2.15
             current_total_density = np.sum(tdNdmdzddeg2*(z > z_min_lya))
-            print("Scaling lya dndzdm from a total density (z>={}) of {:.1f} to {:.1f}/deg2".format(
-                z_min_lya, current_total_density, self.tracer_density))
+            print(
+                f"Scaling lya dndzdm from a total density (z>={z_min_lya}) of "
+                f"{current_total_density:.1f} to {self.tracer_density:.1f}/deg2"
+            )
             tdNdmdzddeg2 *= (self.tracer_density/current_total_density)
 
         z = np.unique(z)
@@ -120,11 +168,11 @@ class Tracer:
         tdNdmdzddeg2 = np.reshape(tdNdmdzddeg2, [len(z), len(m)])
 
         # figure out allowed redshift range (will check out of bounds)
-        self._zmin = z[0]  # - 0.5*dz
-        self._zmax = z[-1]  # + 0.5*dz
+        self._zmin = z[0]
+        self._zmax = z[-1]
         # figure out allowed magnitude range (will check out of bounds)
-        self._mmin = m[0]  # - 0.5*dm
-        self._mmax = m[-1]  # + 0.5*dm
+        self._mmin = m[0]
+        self._mmax = m[-1]
 
         interpolator = RectBivariateSpline(
             z, m, tdNdmdzddeg2, bbox=[self._zmin, self._zmax, self._mmin, self._mmax],
@@ -134,8 +182,18 @@ class Tracer:
         return interpolator
 
     def _setup_dndzdm_tracer(self, file):
-        """Setup dndz/dm from file"""
+        """Build a bivariate spline interpolator for a discrete tracer dn/dzdm.
 
+        Parameters
+        ----------
+        file : Path
+            Text file with columns (z, m, dn/dzdm/deg^2).
+
+        Returns
+        -------
+        RectBivariateSpline
+            Interpolator for dn/dzdm in deg^{-2} per unit z per unit magnitude.
+        """
         z_arr, m_arr, tdNdmdzddeg2 = np.loadtxt(file, unpack=True)
         z = np.unique(z_arr)
         m = np.unique(m_arr)
@@ -147,8 +205,10 @@ class Tracer:
                 current_total_density = np.sum(tdNdmdzddeg2.reshape(z.size, m.size)[z > 2.15])
             else:
                 current_total_density = np.sum(tdNdmdzddeg2.reshape(z.size, m.size))
-            print("Scaling dndzdm tracer from a total density of {} to {}/deg2".format(
-                current_total_density, self.tracer_density))
+            print(
+                f"Scaling dndzdm tracer from a total density of "
+                f"{current_total_density} to {self.tracer_density}/deg2"
+            )
             tdNdmdzddeg2 *= (self.tracer_density/current_total_density)
 
         # This assumes entries are evenly spaced.
@@ -159,11 +219,11 @@ class Tracer:
         tdNdmdzddeg2 = np.reshape(tdNdmdzddeg2, [len(z), len(m)])
 
         # figure out allowed redshift range (will check out of bounds)
-        self._zmin = z[0]  # - 0.5*dz
-        self._zmax = z[-1]  # + 0.5*dz
+        self._zmin = z[0]
+        self._zmax = z[-1]
         # figure out allowed magnitude range (will check out of bounds)
-        self._mmin = m[0]  # - 0.5*dm
-        self._mmax = m[-1]  # + 0.5*dm
+        self._mmin = m[0]
+        self._mmax = m[-1]
 
         interpolator = RectBivariateSpline(
             z, m, tdNdmdzddeg2, bbox=[self._zmin, self._zmax, self._mmin, self._mmax],

@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-"""Plot effective densities of measurements. For Lya it's the 2D effective density defined by McQuinn and White 2011. For tracers it's just the 3D density."""
+"""Plot effective densities of measurements.
+
+For Lya it's the 2D effective density defined by McQuinn and White 2011.
+For tracers it's just the 3D density.
+"""
 
 import argparse
 import numpy as np

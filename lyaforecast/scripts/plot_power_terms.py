@@ -114,8 +114,10 @@ if __name__ == '__main__':
             aliasing = forecast.covariance.compute_aliasing(zc,kt_deg,kp_skm)
 
             ax.plot(k_hmpc, p3d, color='blue', label=r'$P_F$', alpha=0.5, linestyle=linestyles[i])
-            ax.plot(k_hmpc, aliasing, color='green', label=r'$P_w^\perp P_F^\mathrm{1D}$', alpha=0.5,linestyle=linestyles[i])
-            ax.plot(k_hmpc, p_n_eff * np.ones(500), color='purple', label=r'$P_N^\mathrm{eff}$', alpha=0.5,linestyle=linestyles[i])
+            ax.plot(k_hmpc, aliasing, color='green',
+                    label=r'$P_w^\perp P_F^\mathrm{1D}$', alpha=0.5, linestyle=linestyles[i])
+            ax.plot(k_hmpc, p_n_eff * np.ones(500), color='purple',
+                    label=r'$P_N^\mathrm{eff}$', alpha=0.5, linestyle=linestyles[i])
 
             if i == 0:
                 ax.legend(fontsize=20)

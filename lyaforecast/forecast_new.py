@@ -1,5 +1,6 @@
 """Control module for lyaforecast. Should be structured as follows:
-    -   we use Covariance class for each config, and store observed powers and INDIVIDUAL covariances in ?dictionaries?
+    -   we use Covariance class for each config, and store observed powers and
+        INDIVIDUAL covariances in ?dictionaries?
     - Then, using the Fisher class, we compute the parameter measurements
 
 """
@@ -21,52 +22,87 @@ from lyaforecast import (
 
 @dataclass
 class FlagStore:
+    """Flags controlling which power spectra are included in the forecast.
+
+    Parameters
+    ----------
+    lya_auto : bool
+        Include the Lya forest auto-correlation.
+    cross : bool
+        Include the Lya x discrete tracer cross-correlation.
+    tracer_auto : bool
+        Include the discrete tracer auto-correlation.
+    """
+
     lya_auto: bool
     cross: bool
     tracer_auto: bool
 
     @property
-    def include_tracer(self) -> bool:
-        """return array of bool for included tracers"""
+    def include_tracer(self):
+        """Return ordered list of booleans for [lya_auto, cross, tracer_auto].
+
+        Returns
+        -------
+        list of bool
+        """
         return list(asdict(self).values())
 
     @property
-    def is_3x2pt(self) -> bool:
-        """Return True if all flags are True."""
+    def is_3x2pt(self):
+        """Return True if all three correlation flags are enabled.
+
+        Returns
+        -------
+        bool
+        """
         return all(asdict(self).values())
 
 
-# Redirect print to logging
 class LoggerWriter:
+    """Redirect print statements to a Python logger."""
+
     def __init__(self, level):
+        """
+        Parameters
+        ----------
+        level : callable
+            Logger method to call for each non-empty message.
+        """
         self.level = level
 
     def write(self, message):
+        """Write a stripped message to the logger.
+
+        Parameters
+        ----------
+        message : str
+            Text to log; empty strings are silently ignored.
+        """
         message = message.strip()
         if message:
             self.level(message)
 
     def flush(self):
+        """No-op flush for compatibility with the file-like interface."""
         pass
 
 
 class NewForecast:
-    """Main LyaForecast class.
-    ...outline...
+    """Updated entry point for running a multi-tracer BAO forecast.
+
+    Supports an arbitrary number of tracers specified as ``[tracer N]`` sections
+    in the ini file, and computes individual and combined Fisher matrices for all
+    enabled tracer-pair correlations.
     """
-    # _survey_properties = None
-    # _spectro_properties = None
 
     def __init__(self, cfg_path):
         """
         Parameters
         ----------
-        cfg_path : string
-            Path to main.ini config file
+        cfg_path : str
+            Path to the main .ini configuration file.
         """
-
-        # init_start_time = time.time()
-
         print('Initialise forecast')
 
         # Read config files
@@ -80,23 +116,6 @@ class NewForecast:
         # setup logger
         self.logger = setup_logger(self.out_folder)
         self.logger.info('Running BAO forecast')
-
-        # # hold spectra names (for including multiple configs)
-        # self.spectrum_names = {}
-
-        # which power spectra to forecast
-        # self.flags = FlagStore(
-        #     lya_auto=self.config['control'].getboolean('lya auto'),
-        #     cross=self.config['control'].getboolean('cross'),
-        #     tracer_auto=self.config['control'].getboolean('tracer auto')
-        # )
-
-        # tracer types
-        # self._lya_tracer = self.config['lya forest'].get('tracer')
-        # self._tracer = self.config['tracer'].get('tracer')
-        # self._cross_tracer = 'lya_' + self._tracer
-        # # not used currently - still unsure what to do.
-        # self._add_spectum_names()
 
         tracer_configs = {}
         for key in self.config.keys():
@@ -116,9 +135,6 @@ class NewForecast:
             for j, t2 in enumerate(self.tracers):
                 if i > j:
                     continue
-                # if 'lya' in t1 and 'lya' in t2 and t1 != t2:
-                #     continue  # skip lya_lya cross
-
                 self.correlations[f"{t1}_{t2}"] = (self.tracers[t1], self.tracers[t2])
 
         correlation_names = self.config['control'].get('correlations', 'all').split(' ')
@@ -133,8 +149,6 @@ class NewForecast:
             flipped_cor  = tt[1]+"_"+tt[0]
             flipped_correlation_names.append(flipped_cor)
         correlation_names += flipped_correlation_names
-        #print("correlation_names=",correlation_names)
-
 
         self.correlations_to_compute = []
         for key in self.correlations.keys():
@@ -147,7 +161,7 @@ class NewForecast:
         # load survey instance
         self._survey = Survey(self.config)
 
-        # # initialise cosmology
+        # initialise cosmology
         self._cosmo = CosmoCamb(
             self.config['cosmo'].get('filename'),
             self.config['cosmo'].getfloat('z_ref', None),
@@ -200,30 +214,54 @@ class NewForecast:
 
         self.num_correlations = len(self.correlations)
 
-        # init_end_time = time.time()
-        # print(f"Forecast initialized in {init_end_time - init_start_time:.4f} seconds.")
-
     @property
     def cosmo(self):
-        """Cosmological model instance."""
+        """Cosmological model instance.
+
+        Returns
+        -------
+        CosmoCamb
+        """
         return self._cosmo
 
     @property
     def survey(self):
-        """Survey description instance."""
+        """Survey description instance.
+
+        Returns
+        -------
+        Survey
+        """
         return self._survey
 
     @property
     def spectrograph(self):
-        """Spectrograph model instance."""
+        """Spectrograph model instance(s) keyed by correlation name.
+
+        Returns
+        -------
+        dict
+        """
         return self._spectrograph
 
     @property
     def power_spectrum(self):
-        """Power spectrum model instance."""
+        """Power spectrum model instance.
+
+        Returns
+        -------
+        PowerSpectrum
+        """
         return self._power_spec
 
     def new_run_forecast(self):
+        """Run per-correlation and combined BAO forecasts over all redshift bins.
+
+        Returns
+        -------
+        data : dict
+            Per-correlation sigma_at / sigma_ap / corr_coef arrays plus combined 'total' key.
+        """
         sigma_at = {
             corr: np.zeros(self._survey.num_z_bins)
             for corr in self.correlations.keys()
@@ -276,16 +314,11 @@ class NewForecast:
                     for mu in self._power_spec.mu
                 ])
 
-                # print(f"Computed P(k, mu) for correlation: {corr_name}")
-                # print(f"P(k, mu) sum: {fisher_input['p3d_cache'][corr_name].sum()}")
-                # print(f"P_obs(k, mu) sum: {fisher_input['p3d_obs_cache'][corr_name].sum()}")
-
             # number of modes as a function of k, in z bin
             # This should be the same for all correlations in a given z bin
             num_modes_k = self._covariance[corr_name].num_modes
 
             # Compute fisher for each correlation separately
-            # For cross_correlations need to pass the two autos as well (no idea why)
             for ic, corr in enumerate(self.correlations.keys()):
                 if corr not in self.correlations_to_compute:
                     continue
@@ -320,13 +353,12 @@ class NewForecast:
                 sigma_at[corr][iz] = sigma_at_z
                 corr_coef[corr][iz] = corr_coef_z
 
-            # initialise Fisher matrix computation class
+            # Compute fisher for all correlations combined
             fisher = Fisher(
                 self._power_spec, self._cosmo, num_modes_k, zbin_index=iz,
                 reconstruction_factor=self.reconstruction_factor
             )
 
-            # Compute fisher for all correlations combined
             p3d_subset = {
                 key: fisher_input['p3d_cache'][key]
                 for key in self.correlations_to_compute
@@ -363,7 +395,15 @@ class NewForecast:
         return data
 
     def run_forecast(self):
+        """Run the legacy single-covariance BAO forecast (deprecated, use new_run_forecast).
 
+        Returns
+        -------
+        data : dict
+            Forecast results including sigma_at / sigma_ap per redshift bin.
+        fisher_input : dict
+            Per-bin Fisher matrices and cached power spectra.
+        """
         sigma_at = np.zeros(self._survey.num_z_bins)
         sigma_ap = np.zeros(self._survey.num_z_bins)
         corr_coef = np.zeros(self._survey.num_z_bins)
@@ -398,11 +438,8 @@ class NewForecast:
             if self._tracer_biases is not None:
                 self._power_spec.bias.set_tracer_bias(self._tracer_biases[iz], zbin_index=iz)
 
-
             # Compute P(k, mu) for all mu at once
-            # Resulting shape will be (len(mu), len(k))
             p3d_cache = {}
-            # TEMPORARY
             corr_names_temp = ['lya', self._cross_tracer, self._tracer]
             corr_names_cut = [
                 c for j, c in enumerate(corr_names_temp)
@@ -410,7 +447,6 @@ class NewForecast:
             ]
 
             for j, corr in enumerate(corr_names_cut):
-                # #temporary, until I update all dependent functions
                 if not corr == self._cross_tracer:
                     corr_name = corr + '_' + corr
                     corr_names_cut[j] = corr_name
@@ -429,7 +465,6 @@ class NewForecast:
             # compute measured power spectra (e.g. including noise)
             p3d_obs_cache = {}
             for j, corr in enumerate(corr_names_temp):
-                # #temporary, until I update all dependent functions
                 if not corr == self._cross_tracer:
                     corr_name = corr + '_' + corr
                     corr_names_temp[j] = corr_name
@@ -474,19 +509,17 @@ class NewForecast:
         data = {}
         data["redshifts"] = self._survey.z_bin_centres
         data["mean redshift"] = self._cosmo.z_ref
-        # data["magnitudes"] = {self._survey.band: self._survey.maglist}
         data["sigma_at"] = sigma_at
         data["sigma_ap"] = sigma_ap
         data["corr_coef"] = corr_coef
         data["sigma_at_full"] = sigma_at_full
         data["sigma_ap_full"] = sigma_ap_full
-        # data
         self.data = data
 
         return data, fisher_input
 
     def _add_spectum_names(self):
-        # needs to be edited for more than one config
+        """Build human-readable spectrum labels from the active correlation flags."""
         if self.flags.lya_auto:
             lya_auto_name = f'lya({self._lya_tracer})_lya({self._lya_tracer})'
             self.spectrum_names['lya'] = lya_auto_name
