@@ -9,3 +9,4 @@ tests/*
 tests/
 CLAUDE.md
 .claude/
+AGENTS.md
