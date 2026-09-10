@@ -1,10 +1,6 @@
 """ In this module we store all of the survey specifications used in the forecast,
        including the quasar luminosity function."""
 import numpy as np
-from scipy.interpolate import RectBivariateSpline, UnivariateSpline
-from lyaforecast.utils import get_file
-from scipy.ndimage import gaussian_filter1d
-import copy
 
 
 class Survey:
@@ -63,7 +59,7 @@ class Survey:
         z_bin_edges = survey_cfg.get('z bin edges', None)
         z_bin_centres = survey_cfg.get('z bin centres', None)
         if z_bin_edges is not None:
-            assert(z_bin_centres==None) # cannot define both
+            assert(z_bin_centres is None) # cannot define both
             z_bin_edges = np.array(self.split_str(z_bin_edges)).astype(float)
             z_bin_min=z_bin_edges[:-1]
             z_bin_max=z_bin_edges[1:]
@@ -71,7 +67,7 @@ class Survey:
             self.z_bin_edges   = np.array([z_bin_min,z_bin_max])
             self.num_z_bins    = self.z_bin_centres.size
         elif z_bin_centres is not None:
-            self.z_bin_centres = np.array(self.split_str(z_bin_centers)).astype(float)
+            self.z_bin_centres = np.array(self.split_str(z_bin_centres)).astype(float)
             dz = np.zeros(self.z_bin_centres.size)
             dz[1:-1] = (self.z_bin_centres[2:] - self.z_bin_centres[:-2]) / 2.
             dz[0] = self.z_bin_centres[1] - self.z_bin_centres[0]

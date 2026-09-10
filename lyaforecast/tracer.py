@@ -1,8 +1,6 @@
 import numpy as np
 from scipy.interpolate import RectBivariateSpline,interp1d
 from lyaforecast.utils import get_file
-import copy
-from scipy.ndimage import gaussian_filter1d
 
 TRACER_OPTIONS = ['qso', 'elgqso', 'lbg', 'lae']
 CONTINUOUS_TRACERS = ['lya']

@@ -234,22 +234,6 @@ class Covariance:
 
         return Lq_kms
 
-    def _get_forest_wave(self, lya_tracer):
-        """Compute the observed wavelength grid spanning the Lya forest.
-
-        Parameters
-        ----------
-        lya_tracer : Tracer
-            Lya forest tracer defining rest-frame wavelength limits.
-        """
-        assert lya_tracer.type == 'continuous', 'Can only compute zq for continuous tracers'
-
-        lmax_forest = lya_tracer.lrmax * (1 + self._zq)
-        lmin_forest = lya_tracer.lrmin * (1 + self._zq)
-        nbins = int((lmax_forest - lmin_forest) / self._survey.pix_ang)
-
-        self._forest_wave = np.linspace(lmin_forest, lmax_forest, nbins)
-
     def _get_survey_volume(self):
         """Compute the survey volume in (Mpc/h)^3 for the current redshift bin."""
         volume_degkms = self._survey.area_deg2 * self._get_redshift_depth()
@@ -461,40 +445,6 @@ class Covariance:
 
         return 1 / neff_2D_inv
 
-    def _compute_lya_eff_vol(self, k_hmpc, mu):
-        """Effective survey volume for Lya (McQuinn & White 2011).
-
-        Parameters
-        ----------
-        k_hmpc : float or array_like
-            Wavenumber in h/Mpc.
-        mu : float
-            Cosine of the angle to the line of sight.
-
-        Returns
-        -------
-        ndarray
-            Effective volume in (Mpc/h)^3.
-        """
-        # decompose into line of sight component
-        kp_hmpc = k_hmpc * mu
-        # transform from comoving to observed coordinates
-        kp_kms = kp_hmpc / self._distance_to_velocity
-
-        neff_2d = self.compute_neff_2D_lya(k_hmpc, mu) / self._angle_to_distance**2
-
-        p3d = self._power_spec.compute_p3d_hmpc(self._z_mean, k_hmpc, mu, 'lya_lya')
-
-        p1d = (
-            self._power_spec.compute_p1d_kms(
-                self._z_mean, kp_kms, self._res_kms, self._pix_kms, self.corr)
-            / self._distance_to_velocity
-        )
-
-        eff_vol = self._survey_volume_mpc * (p3d / (p3d + p1d / neff_2d))**2
-
-        return eff_vol
-
     def compute_aliasing(self, z, kt_deg, kp_kms):
         """Compute the 3D aliasing power at (kt_deg, kp_kms).
 
@@ -516,77 +466,3 @@ class Covariance:
         aliasing = self._aliasing_weights[-1] * p1d
 
         return aliasing
-
-    def _compute_tracer_eff_vol(self, k_hmpc, mu):
-        """Effective FKP volume for a discrete tracer in (Mpc/h)^3.
-
-        Parameters
-        ----------
-        k_hmpc : float or array_like
-            Wavenumber in h/Mpc.
-        mu : float
-            Cosine of the angle to the line of sight.
-
-        Returns
-        -------
-        ndarray
-            Effective volume in (Mpc/h)^3.
-        """
-        z = self._mean_z()
-        dkms_dmpch = self._cosmo.velocity_from_distance(z)
-        dhmpc_ddeg = self._cosmo.distance_from_degrees(z)
-
-        kp_hmpc = k_hmpc * mu
-        kt_hmpc = k_hmpc * np.sqrt(1.0-mu**2)
-        kp_kms = kp_hmpc / dkms_dmpch
-        kt_deg = kt_hmpc * dhmpc_ddeg
-
-        volume_degkms = self._survey.area_deg2 * self._get_redshift_depth()
-        volume_hmpc = volume_degkms * dhmpc_ddeg**2 / dkms_dmpch
-
-        p3d_tracer = self._power_spec.compute_p3d_kms_smooth(
-            z, kt_deg, kp_kms, self._res_kms, self._pix_kms, self.corr)
-
-        shot_noise = self._tracer_noise_power
-        eff_vol = volume_hmpc * (p3d_tracer / (p3d_tracer + shot_noise))**2
-
-        return eff_vol
-
-    def compute_n_pk(self, k, mu):
-        """Compute the signal-to-noise nP at (k, mu) for Lya and tracer.
-
-        Parameters
-        ----------
-        k : float or array_like
-            Wavenumber in h/Mpc.
-        mu : float
-            Cosine of the angle to the line of sight.
-
-        Returns
-        -------
-        np_lya : ndarray
-            nP for the Lya auto-correlation.
-        np_tracer : ndarray
-            nP for the discrete tracer auto-correlation.
-        """
-        z = self._mean_z()
-
-        dkms_dmpch = self._cosmo.velocity_from_distance(z)
-        dhmpc_ddeg = self._cosmo.distance_from_degrees(z)
-
-        kp_hmpc = k * mu
-        kt_hmpc = k * np.sqrt(1.0-mu**2)
-        kp_kms = kp_hmpc / dkms_dmpch
-        kt_deg = kt_hmpc * dhmpc_ddeg
-
-        total_power_lya_degkms = self._compute_total_power_lya(z, kt_deg, kp_kms)
-        noise_lya = total_power_lya_degkms - self._power_spec.compute_p3d_kms_smooth(
-            z, kt_deg, kp_kms, self._res_kms, self._pix_kms, 'lya_lya')
-        np_lya = self._power_spec.compute_p3d_kms_smooth(
-            z, kt_deg, kp_kms, self._res_kms, self._pix_kms, 'lya_lya') / noise_lya[-1]
-
-        np_tracer = self._power_spec.compute_p3d_kms_smooth(
-            z, kt_deg, kp_kms, self._res_kms, self._pix_kms, self.corr
-        ) / self._tracer_noise_power[-1]
-
-        return np_lya, np_tracer

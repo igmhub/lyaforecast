@@ -2,11 +2,6 @@ from pathlib import Path
 import os.path
 import logging
 
-import lyaforecast
-
-import numpy as np
-import mcfit
-
 
 def check_file(input_path):
     """Verify a file exists and return it, raising an error otherwise.
@@ -58,26 +53,26 @@ def get_file(path):
     # First check if it's an absolute path
     if input_path.is_file():
         return input_path
-    # Get the lyacast path and check inside lyacast (this returns LyaCast/lyacast)
-    lyacast_path = Path(os.path.dirname(lyaforecast.__file__))
+    # Locate the installed package resources.
+    package_path = Path(__file__).resolve().parent
 
     # Check if it's a resource
-    resource = lyacast_path / 'resources' / input_path
+    resource = package_path / 'resources' / input_path
     if resource.is_file():
         return resource
 
     # Check if it's a data source
-    data = lyacast_path / 'resources/data' / input_path
+    data = package_path / 'resources/data' / input_path
     if data.is_file():
         return data
 
     # Check if it's a default config
-    default_cfg = lyacast_path / 'resources/default_configs' / input_path
+    default_cfg = package_path / 'resources/default_configs' / input_path
     if default_cfg.is_file():
         return default_cfg
 
     # Check if it's a camb config
-    camb_cfg = lyacast_path / 'resources/camb_configs' / input_path
+    camb_cfg = package_path / 'resources/camb_configs' / input_path
     if camb_cfg.is_file():
         return camb_cfg
 
@@ -110,16 +105,16 @@ def get_dir(path):
     if input_path.is_dir():
         return input_path
 
-    # Get the lyacast path and check inside lyacast (this returns LyaCast/lyacast)
-    lyacast_path = Path(os.path.dirname(lyaforecast.__file__))
+    # Locate the installed package resources.
+    package_path = Path(__file__).resolve().parent
 
     # Check if it's a resource
-    resource = lyacast_path / 'resources' / input_path
+    resource = package_path / 'resources' / input_path
     if resource.is_dir():
         return resource
 
     # Check if it's a data source (folder)
-    data = lyacast_path / 'resources/data' / input_path
+    data = package_path / 'resources/data' / input_path
     if data.is_dir():
         return data
 
@@ -127,35 +122,31 @@ def get_dir(path):
 
 
 def setup_logger(out_folder):
-    """Create and configure a logger that writes to both a file and the console.
+    """Configure console and file logging for one output directory.
+
+    Repeated calls for the same directory reuse handlers. Application root
+    logging is left unchanged, and messages do not propagate to root handlers.
 
     Parameters
     ----------
     out_folder : str or Path
-        Directory where the ``forecast.log`` file will be written.
+        Directory for forecast.log; created if missing.
 
     Returns
     -------
     logging.Logger
-        Configured logger instance.
+        Logger shared by forecasts writing to this directory.
     """
-    logger = logging.getLogger(__name__)
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(levelname)s - %(message)s'
-    )
-
-    # File handler (WARNING and above)
-    file_handler = logging.FileHandler(f"{out_folder}/forecast.log")
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(
-        logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    )
-    logger.addHandler(file_handler)
-
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
-    logger.addHandler(console_handler)
-
+    out_folder = Path(out_folder).resolve()
+    out_folder.mkdir(parents=True, exist_ok=True)
+    logger = logging.getLogger(f"{__name__}.{out_folder}")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    if not logger.handlers:
+        file_handler = logging.FileHandler(out_folder / 'forecast.log')
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
     return logger

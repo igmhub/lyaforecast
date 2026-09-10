@@ -1,0 +1,10 @@
+include README.md LICENSE AGENTS.md
+recursive-include examples *.ini *.py *.ipynb *.md
+recursive-include tests *.py
+recursive-include scripts *.py *.sh
+recursive-include lyaforecast/resources *.ini *.dat *.txt *.md
+prune .validation
+prune .github
+prune build
+prune dist
+global-exclude __pycache__ *.py[cod]

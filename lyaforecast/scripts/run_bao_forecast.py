@@ -1,29 +1,20 @@
-#!/usr/bin/env python
+"""Command-line entry point for the supported multi-tracer forecast."""
 import argparse
-from lyaforecast import Forecast
+
+
+def get_args(argv=None):
+    """Parse one required INI configuration path."""
+    parser = argparse.ArgumentParser(description="Run a multi-tracer BAO forecast.")
+    parser.add_argument("--configs", "-i", required=True, metavar="CONFIG", help="INI configuration")
+    return parser.parse_args(argv)
 
 
 def main():
+    """Run the same workflow exposed by NewForecast.new_run_forecast."""
     args = get_args()
+    from lyaforecast.forecast_new import NewForecast
 
-    forecast = Forecast(args.configs[0])
-
-    _ = forecast.run_forecast()
-
-
-def get_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-                formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                description='Run Forecast.')
-
-    parser.add_argument('--configs', '-i',
-                        type=str, 
-                        nargs='+',
-                        default=None, 
-                        help='Config file')
-
-    args = parser.parse_args()
-    return args
+    NewForecast(args.configs).new_run_forecast()
 
 
 if __name__ == "__main__":
