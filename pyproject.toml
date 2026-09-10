@@ -1,25 +1,54 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "lyaforecast"
-version = "0.1.0"
-description = "A package to forecast cosmological constraints from Lyman-alpha surveys."
+dynamic = ["version"]
+description = "Forecast cosmological constraints from Lyman-alpha surveys."
+readme = "README.md"
+requires-python = ">=3.11"
+license-files = ["LICENSE"]
 authors = [
-    { name = "Calum Gordon", email = "cgordon@ifae.es"},
-    { name = "Andreu Font-Ribera", email = "afont@ifae.es"},
-    { name = "Julien Guy", email = "jguy@lbl.gov"}
+    {name = "Calum Gordon", email = "cgordon@ifae.es"},
+    {name = "Andreu Font-Ribera", email = "afont@ifae.es"},
+    {name = "Julien Guy", email = "jguy@lbl.gov"},
 ]
+dependencies = ["numpy", "scipy", "camb"]
+
+[project.optional-dependencies]
+plot = ["matplotlib"]
+notebook = ["matplotlib", "nbformat", "nbclient", "ipykernel"]
+dev = ["pytest", "ruff", "build", "twine"]
 
 [project.urls]
-repository = "https://github.com/igmhub/lyaforecast.git"
-
-[tool.setuptools.dynamic]
-version = {attr = "lyaforecast.__version__"}
-readme = {file = ["README.md"]}
-dependencies = {file = "requirements.txt"}
-
+repository = "https://github.com/igmhub/lyaforecast"
 
 [project.scripts]
 run-bao-forecast = "lyaforecast.scripts.run_bao_forecast:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "lyaforecast.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["lyaforecast*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+lyaforecast = ["resources/**/*.ini", "resources/**/*.dat", "resources/**/*.txt", "resources/**/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+markers = [
+    "integration: reduced forecasts using real CAMB calculations",
+    "examples: execute maintained scripts and notebooks (requires plot and notebook extras)",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [".validation", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

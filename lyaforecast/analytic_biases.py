@@ -1,16 +1,11 @@
-import numpy as np
 from scipy.interpolate import interp1d
 
 
 # to-do, make this less hard-coded
 class AnalyticBias:
-    """Analytic formulae for biases and non-linear corrections of Lya P3D.
-
-    Parameters are out-of-date and will later be handled by ForestFlow.
-    """
+    """Density biases and Kaiser redshift-space distortions for tracer P3D."""
 
     OPTIONS = ['lya', 'qso', 'elgqso', 'lbg', 'lae']
-    _zbin_index = None
 
     def __init__(self, cosmo):
         """
@@ -24,65 +19,7 @@ class AnalyticBias:
             self._cosmo.z_bins, self._cosmo.growth_rate_zbins,
             kind='linear', bounds_error=False, fill_value='extrapolate'
         )
-        self._zref = self._cosmo.z_ref
         self._density_bias_func = dict()
-
-    def _get_non_linear_corr(self, k_hMpc):
-        """Non-linear clustering correction to Lya P3D.
-
-        Parameters
-        ----------
-        k_hMpc : float or array_like
-            Wavenumber in h/Mpc.
-
-        Returns
-        -------
-        float or ndarray
-            Multiplicative non-linear correction exponent.
-        """
-        k_nl = 6.40
-        alpha_nl = 0.569
-        return pow(k_hMpc / k_nl, alpha_nl)
-
-    def _get_pressure_corr(self, k_hMpc):
-        """Jeans pressure correction to Lya P3D.
-
-        Parameters
-        ----------
-        k_hMpc : float or array_like
-            Wavenumber in h/Mpc.
-
-        Returns
-        -------
-        float or ndarray
-            Multiplicative pressure correction exponent.
-        """
-        k_p = 15.3
-        alpha_p = 2.01
-        return pow(k_hMpc / k_p, alpha_p)
-
-    def _get_non_linear_velo(self, k_hMpc, mu):
-        """Non-linear velocity (fingers-of-god) correction to Lya P3D.
-
-        Parameters
-        ----------
-        k_hMpc : float or array_like
-            Wavenumber in h/Mpc.
-        mu : float or array_like
-            Cosine of the angle to the line of sight.
-
-        Returns
-        -------
-        float or ndarray
-            Multiplicative velocity correction exponent.
-        """
-        k_v0 = 1.220
-        alpha_v = 1.50
-        k_vv = 0.923
-        alpha_vv = 0.451
-        kpar = k_hMpc * mu
-        kv = k_v0 * pow(1 + k_hMpc / k_vv, alpha_vv)
-        return pow(kpar/kv, alpha_v)
 
     def _get_density_bias(self, z, which):
         """Linear density bias b(z) for a given tracer.
@@ -152,37 +89,8 @@ class AnalyticBias:
         else :
             return self._growth_rate_func(z)/self._get_density_bias(z, which)
 
-    def _small_scale_correction(self, k_hmpc, mu, which):
-        """Analytic small-scale correction to Lya P3D from McDonald (2003).
-
-        Values computed at z=2.33; cosmology-dependent effects are ignored.
-
-        Parameters
-        ----------
-        k_hmpc : float or array_like
-            Wavenumber in h/Mpc.
-        mu : float or array_like
-            Cosine of the angle to the line of sight.
-        which : str
-            Tracer name.
-
-        Returns
-        -------
-        float or ndarray
-            Multiplicative small-scale correction factor.
-        """
-        if which == 'lya':
-            texp = (
-                self._get_non_linear_corr(k_hmpc)
-                - self._get_pressure_corr(k_hmpc)
-                - self._get_non_linear_velo(k_hmpc, mu)
-            )
-            return np.exp(texp)
-        else:
-            return 1
-
     def compute_bias(self, z, k_hmpc, mu, corr, linear=True):
-        """Total scale-dependent bias P_F / P_lin, including Kaiser and small-scale terms.
+        """Total Kaiser bias P_F / P_lin for a tracer pair.
 
         Parameters
         ----------
@@ -195,7 +103,7 @@ class AnalyticBias:
         corr : str
             Correlation name of the form 'tracer1_tracer2'.
         linear : bool, optional
-            If True, return only the Kaiser term (no small-scale correction).
+            Retained for configuration compatibility; the model uses Kaiser terms only.
 
         Returns
         -------
@@ -222,6 +130,6 @@ class AnalyticBias:
         bias_func : callable
             Function b(z) returning the linear density bias at redshift z.
         """
-        if not tracer in self.OPTIONS :
+        if tracer not in self.OPTIONS :
             raise ValueError(f"in set_density_bias_func, tracer name must be in {self.OPTIONS}")
         self._density_bias_func[tracer]=bias_func

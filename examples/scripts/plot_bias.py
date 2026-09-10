@@ -1,6 +1,6 @@
-"""Analytic P1D and smoothing."""
+"""Current and historical bias models."""
 from _diagnostics import main
 
 
 if __name__ == "__main__":
-    main("p1d")
+    main("bias")

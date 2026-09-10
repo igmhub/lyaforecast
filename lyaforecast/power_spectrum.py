@@ -1,5 +1,6 @@
 import numpy as np
 from lyaforecast.analytic_biases import AnalyticBias
+from lyaforecast.analytic_p1d_PD2013 import P1D_z_kms_PD2013
 
 
 class PowerSpectrum:
@@ -35,7 +36,7 @@ class PowerSpectrum:
         self._mu_min = _properties.getfloat('mu_min', 0)
         self._mu_max = _properties.getfloat('mu_max', 1)
         self._num_mu_bins = _properties.getint('num_mu_bins', 10)
-        # True to ignore small-scale components of power spectra.
+        # Compatibility flag; the current bias model uses Kaiser terms only.
         self._linear = _properties.getboolean('linear power')
 
         # grids for evaluating power spectrum
@@ -244,24 +245,10 @@ class PowerSpectrum:
         ndarray
             1D Lya power spectrum in (km/s) units.
         """
-        # numbers from Palanque-Delabrouille (2013)
-        A_F = 0.064
-        n_F = -2.55
-        alpha_F = -0.1
-        B_F = 3.55
-        beta_F = -0.28
-        k0 = 0.009
-        z0 = 3.0
-        n_F_z = n_F + beta_F * np.log((1+z)/(1+z0))
-        # this function would go to 0 at low k, instead of flat power
-        k_min = k0*np.exp((-0.5*n_F_z-1)/alpha_F)
-        k_kms = np.fmax(k_kms, k_min)
-        exp1 = 3 + n_F_z + alpha_F * np.log(k_kms/k0)
-        toret = np.pi * A_F / k0 * pow(k_kms/k0, exp1-1) * pow((1+z)/(1+z0), B_F)
-        return toret
+        return P1D_z_kms_PD2013(z, k_kms)
 
     def compute_p1d_hmpc(self, z, k_hmpc, res_hmpc=None, pix_hmpc=None):
-        """Analytical P1D in h/Mpc units (currently unused).
+        """Analytical P1D in h/Mpc units, with optional smoothing.
 
         Parameters
         ----------

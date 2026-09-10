@@ -148,43 +148,10 @@ class Weights:
         """
         # 3D noise power as a function of magnitude
         noise_power = self._compute_noise_power_m(weights)
-        # effective 3D density of quasars
-        int_1 = self.compute_int_1(weights)
-        int_2 = self.compute_int_2(weights)
-        # 2D density of lines of sight (units of 1/deg^2)
-        aliasing = int_2 / (int_1**2 * self._forest_length)
         # weights include aliasing as signal
         signal_power = self._p3d_w
 
         weights = signal_power / (signal_power + noise_power)
-
-        return weights
-
-    def _initialise_weights_qso(self):
-        """Compute initial quasar (FKP) weights: uniform over magnitudes.
-
-        Returns
-        -------
-        ndarray
-            Initial weights of shape (n_mag,), all ones.
-        """
-        return np.ones_like(self.maglist)
-
-    def _compute_weights_qso(self, weights):
-        """FKP weighting of discrete tracers (quasars).
-
-        Parameters
-        ----------
-        weights : ndarray
-            Current weights w(m) of shape (n_mag,).
-
-        Returns
-        -------
-        ndarray
-            Updated FKP weights of shape (n_mag,).
-        """
-        np_eff = self.compute_int_1(weights)
-        weights = self._p3d_w / (self._p3d_w + 1 / np_eff)
 
         return weights
 
@@ -363,8 +330,8 @@ class Weights:
         # noise rms per pixel
         noise_rms = np.zeros_like(self.maglist)
         for i, m in enumerate(self.maglist):
-            noise_rms[i] = self._spectrograph.get_pixel_rms_noise(
-                m, self._zq, self._lambda_mean, pix_ang, self._lya_tracer.num_exp)
+            noise_rms[i] = np.asarray(self._spectrograph.get_pixel_rms_noise(
+                m, self._zq, self._lambda_mean, pix_ang, self._lya_tracer.num_exp)).item()
         noise_var = noise_rms**2
 
         return noise_var
