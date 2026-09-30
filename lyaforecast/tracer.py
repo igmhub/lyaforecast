@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.interpolate import RectBivariateSpline,interp1d
+from scipy.interpolate import RectBivariateSpline, interp1d, RegularGridInterpolator
 from lyaforecast.utils import get_file
 import copy
 from scipy.ndimage import gaussian_filter1d
@@ -77,7 +77,7 @@ class Tracer:
         ndarray
             dn/dzdm in deg^{-2} per unit z per unit magnitude.
         """
-        points = self._tracer_dndz(z, m, grid=False)
+        points = self._tracer_dndz((z, m))
         points[m > self._mmax] = 1e-20
         points[m < self._mmin] = 1e-20
 
@@ -177,10 +177,7 @@ class Tracer:
         self._mmin = m[0]
         self._mmax = m[-1]
 
-        interpolator = RectBivariateSpline(
-            z, m, tdNdmdzddeg2, bbox=[self._zmin, self._zmax, self._mmin, self._mmax],
-            kx=2, ky=2
-        )
+        interpolator = RegularGridInterpolator((z, m), tdNdmdzddeg2, bounds_error=False, fill_value=0, method='pchip')
 
         return interpolator
 
@@ -228,9 +225,6 @@ class Tracer:
         self._mmin = m[0]
         self._mmax = m[-1]
 
-        interpolator = RectBivariateSpline(
-            z, m, tdNdmdzddeg2, bbox=[self._zmin, self._zmax, self._mmin, self._mmax],
-            kx=2, ky=2
-        )
+        interpolator = RegularGridInterpolator((z, m), tdNdmdzddeg2, bounds_error=False, fill_value=0, method='pchip')
         return interpolator
 
