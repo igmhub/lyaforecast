@@ -154,11 +154,19 @@ class Fisher:
 
         # Apply peak smoothing
         for i, name in enumerate(spectra_list):
-            if 'lya' not in name:
+            t1, t2 = name.split('_')
+            no_lya = 'lya' not in t1 and 'lya' not in t2
+            only_lya = 'lya' in t1 and 'lya' in t2
+
+            if no_lya:
                 pk[i] *= self._get_peak_smoothing(
                     mu, self.zbin_index, reconstruction_factor=self._reconstruction_factor)
-            else:
+            elif only_lya:
                 pk[i] *= self._get_peak_smoothing(mu, self.zbin_index)
+            else:
+                # mean of broadening sigmas
+                recon = 1 / ((1 / np.sqrt(self._reconstruction_factor) + 1) / 2)**2
+                pk[i] *= self._get_peak_smoothing(mu, self.zbin_index, reconstruction_factor=recon)
 
         # Compute derivative along k (with first entry zero padding)
         dmodel_dlk = np.zeros_like(pk)

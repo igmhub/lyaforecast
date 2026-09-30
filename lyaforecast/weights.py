@@ -231,10 +231,10 @@ class Weights:
         # quasar number density
         dn_dmdegkms = self._get_dn_dkmsdm(self._zq, self.maglist, self._lya_tracer)
         dm = self.maglist[1] - self.maglist[0]
-        integrand = dn_dmdegkms * weights * dm
+        integrand = dn_dmdegkms * weights
 
         # move to using cumsum so we can plot as a function of magnitude
-        int_1 = np.cumsum(integrand)
+        int_1 = np.sum(integrand) * dm
 
         return int_1
 
@@ -255,8 +255,8 @@ class Weights:
         # quasar number density
         dn_dmdegkms = self._get_dn_dkmsdm(self._zq, self.maglist, self._lya_tracer)
         dm = self.maglist[1] - self.maglist[0]
-        integrand = dn_dmdegkms * weights**2 * dm
-        int_2 = np.cumsum(integrand)
+        integrand = dn_dmdegkms * weights**2
+        int_2 = np.sum(integrand) * dm
 
         return int_2
 
@@ -280,8 +280,8 @@ class Weights:
         dn_dmdegkms = self._get_dn_dkmsdm(self._zq, self.maglist, self._lya_tracer)
         dm = self.maglist[1] - self.maglist[0]
 
-        integrand = dn_dmdegkms * weights**2 * pixel_var * dm
-        int_3 = np.cumsum(integrand)
+        integrand = dn_dmdegkms * weights**2 * pixel_var
+        int_3 = np.sum(integrand) * dm
 
         return int_3
 

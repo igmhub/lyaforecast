@@ -81,6 +81,9 @@ class Tracer:
         points[m > self._mmax] = 1e-20
         points[m < self._mmin] = 1e-20
 
+        points[z > self._zmax] = 1e-20
+        points[z < self._zmin] = 1e-20
+
         return points
 
     def init_discrete_tracer(self, tracer_dzdz_file):
@@ -137,28 +140,28 @@ class Tracer:
         RectBivariateSpline
             Interpolator for dn/dzdm in deg^{-2} per unit z per unit magnitude.
         """
-        z, m, tdNdmdzddeg2 = np.loadtxt(file, unpack=True)
+        z_arr, m_arr, tdNdmdzddeg2 = np.loadtxt(file, unpack=True)
 
         if self.mag_min is not None :
             print(f"Enforcing m>={self.mag_min}")
-            tdNdmdzddeg2 *= (m>=self.mag_min)
+            tdNdmdzddeg2 *= (m_arr>=self.mag_min)
 
         if self.mag_max is not None :
             print(f"Enforcing m<={self.mag_max}")
-            tdNdmdzddeg2 *= (m<=self.mag_max)
+            tdNdmdzddeg2 *= (m_arr<=self.mag_max)
 
         # scale density of quasars to desired number. By default given staright from QLF
         if self.tracer_density is not None:
             z_min_lya = 2.15
-            current_total_density = np.sum(tdNdmdzddeg2*(z > z_min_lya))
+            current_total_density = np.sum(tdNdmdzddeg2*(z_arr > z_min_lya))
             print(
                 f"Scaling lya dndzdm from a total density (z>={z_min_lya}) of "
                 f"{current_total_density:.1f} to {self.tracer_density:.1f}/deg2"
             )
             tdNdmdzddeg2 *= (self.tracer_density/current_total_density)
 
-        z = np.unique(z)
-        m = np.unique(m)
+        z = np.unique(z_arr)
+        m = np.unique(m_arr)
 
         # This assumes entries are evenly spaced.
         dz = z[1] - z[0]
@@ -230,3 +233,4 @@ class Tracer:
             kx=2, ky=2
         )
         return interpolator
+

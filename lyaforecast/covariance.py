@@ -368,11 +368,11 @@ class Covariance:
         p3d = self._power_spec.compute_p3d_kms_smooth(
             self._z_mean, kt_deg, kp_kms, self._res_kms, self._pix_kms, corr)
         aliasing = (
-            self._aliasing_weights[-1] *
+            self._aliasing_weights *
             self._power_spec.compute_p1d_kms(
                 self._z_mean, kp_kms, self._res_kms, self._pix_kms, corr)
         )
-        noise = self._effective_noise_power[-1]
+        noise = self._effective_noise_power
 
         total_power = p3d + aliasing + noise
 
