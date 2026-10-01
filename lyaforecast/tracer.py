@@ -79,6 +79,12 @@ class Tracer:
         """
         points = self._tracer_dndz(z, m)
 
+        points[m > self._mmax] = 1e-20
+        points[m < self._mmin] = 1e-20
+
+        points[z > self._zmax] = 1e-20
+        points[z < self._zmin] = 1e-20
+
         return points
 
     def init_discrete_tracer(self, tracer_dzdz_file):
@@ -215,15 +221,17 @@ class Tracer:
         tdNdmdzddeg2 /= (dz*dm)
         tdNdmdzddeg2 = np.reshape(tdNdmdzddeg2, [len(z), len(m)])
 
-        # figure out allowed redshift range (will check out of bounds)
-        self._zmin = z[0]
-        self._zmax = z[-1]
-        # figure out allowed magnitude range (will check out of bounds)
-        self._mmin = m[0]
-        self._mmax = m[-1]
 
         z_edges = np.append(z - dz / 2, z[-1] + dz / 2)
         m_edges = np.append(m - dm / 2, m[-1] + dm / 2)
+
+        # figure out allowed redshift range (will check out of bounds)
+        self._zmin = z_edges[0]
+        self._zmax = z_edges[-1]
+        # figure out allowed magnitude range (will check out of bounds)
+        self._mmin = m_edges[0]
+        self._mmax = m_edges[-1]
+
         interpolator = Histogram2DInterpolator(z_edges, m_edges, tdNdmdzddeg2)
 
         return interpolator
