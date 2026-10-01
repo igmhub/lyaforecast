@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.interpolate import RectBivariateSpline, interp1d, RegularGridInterpolator
-from lyaforecast.utils import get_file
+from lyaforecast.utils import get_file, Histogram2DInterpolator
 import copy
 from scipy.ndimage import gaussian_filter1d
 
@@ -77,12 +77,7 @@ class Tracer:
         ndarray
             dn/dzdm in deg^{-2} per unit z per unit magnitude.
         """
-        points = self._tracer_dndz((z, m))
-        points[m > self._mmax] = 1e-20
-        points[m < self._mmin] = 1e-20
-
-        points[z > self._zmax] = 1e-20
-        points[z < self._zmin] = 1e-20
+        points = self._tracer_dndz(z, m)
 
         return points
 
@@ -177,7 +172,9 @@ class Tracer:
         self._mmin = m[0]
         self._mmax = m[-1]
 
-        interpolator = RegularGridInterpolator((z, m), tdNdmdzddeg2, bounds_error=False, fill_value=0, method='pchip')
+        z_edges = np.append(z - dz / 2, z[-1] + dz / 2)
+        m_edges = np.append(m - dm / 2, m[-1] + dm / 2)
+        interpolator = Histogram2DInterpolator(z_edges, m_edges, tdNdmdzddeg2)
 
         return interpolator
 
@@ -225,6 +222,8 @@ class Tracer:
         self._mmin = m[0]
         self._mmax = m[-1]
 
-        interpolator = RegularGridInterpolator((z, m), tdNdmdzddeg2, bounds_error=False, fill_value=0, method='pchip')
-        return interpolator
+        z_edges = np.append(z - dz / 2, z[-1] + dz / 2)
+        m_edges = np.append(m - dm / 2, m[-1] + dm / 2)
+        interpolator = Histogram2DInterpolator(z_edges, m_edges, tdNdmdzddeg2)
 
+        return interpolator

@@ -159,3 +159,16 @@ def setup_logger(out_folder):
     logger.addHandler(console_handler)
 
     return logger
+
+
+class Histogram2DInterpolator:
+    def __init__(self, x_edges, y_edges, values, fill_value=0.0):
+        self.x_edges = np.ascontiguousarray(x_edges)
+        self.y_edges = np.ascontiguousarray(y_edges)
+        self.padded_values = np.pad(values, pad_width=1, mode='constant', constant_values=fill_value)
+
+    def __call__(self, x, y):
+        ix = np.searchsorted(self.x_edges, x, side='right')
+        iy = np.searchsorted(self.y_edges, y, side='right')
+
+        return self.padded_values[ix, iy]
