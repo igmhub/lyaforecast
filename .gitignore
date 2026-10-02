@@ -9,3 +9,8 @@ tests/*
 tests/
 CLAUDE.md
 .claude/
+.validation/
+.ruff_cache/
+.pytest_cache/
+*.pyc
+*dist
