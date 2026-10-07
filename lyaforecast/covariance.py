@@ -1,6 +1,14 @@
 import numpy as np
 from lyaforecast.weights import Weights
 
+# Effective noise power (deg^2 km/s) assigned to a redshift bin that has no Lya forest
+# coverage in the integrated forest-pixel mode. It is equivalent to a pixel noise rms of
+# 1e10, the 'large_noise' that Spectrograph returns for out-of-range pixels in the central
+# mode: the Lya information of the bin is removed, while the total Lya power and the Fisher
+# matrix stay finite and invertible (an infinite power would make the Lya-auto Fisher
+# matrix exactly zero and singular).
+NO_FOREST_NOISE_POWER = 1e20
+
 
 class Covariance:
     """Compute covariance matrix components for given tracers in a single redshift bin.
@@ -54,6 +62,9 @@ class Covariance:
         self._power_spec = power_spectrum
         # whether to iterate over magnitude instead of redshift
         self.per_mag = self._config['control'].getboolean('per mag')
+        # integrate over quasar redshift and forest pixels within each bin
+        self._integrate_forest_pixels = self._config['control'].getboolean(
+            'integrate forest pixels', fallback=False)
 
         # tracer instances
         self._tracer1 = tracer1
@@ -87,6 +98,8 @@ class Covariance:
         self.lmax = None
         self._aliasing_weights = None
         self._effective_noise_power = None
+        # effective redshift of the forest pixels (integrated mode only)
+        self.forest_zeff = None
         self._num_modes = None
 
         self.verbose = 1
@@ -264,6 +277,37 @@ class Covariance:
             * self._power_spec.dk * self._power_spec.dmu / (2 * np.pi**2)
         )
 
+    def _get_forest_weights_corr(self, corr_name, lya_tracer, discrete_tracer):
+        """Return the correlation name whose power spectra define the Lya pixel weights.
+
+        The optimal pixel weights are a property of the forest sample, not of the
+        correlation that is being measured. For a Lya x discrete-tracer correlation the
+        cross power is negative (b_Lya < 0) and would give negative weights, so the weights
+        are evaluated with the Lya auto power of the same Lya tracer. The auto key is
+        always registered in the spectrograph and power-spectrum dictionaries of
+        ``NewForecast``, which builds every tracer pair regardless of the ``correlations``
+        option. For a Lya auto, or for two different Lya tracers (positive cross power),
+        the correlation itself is used.
+
+        Parameters
+        ----------
+        corr_name : str
+            Name of the correlation being computed.
+        lya_tracer : Tracer
+            Lya (continuous) tracer of the correlation.
+        discrete_tracer : Tracer or None
+            Discrete tracer of the correlation; None if both tracers are continuous.
+
+        Returns
+        -------
+        str
+            Correlation name passed to the Weights instance.
+        """
+        if discrete_tracer is None:
+            return corr_name
+
+        return f'{lya_tracer.name}_{lya_tracer.name}'
+
     def compute_eff_density_and_noise(self, corr_name):
         """Compute the effective density of lines of sight and noise power for the current bin.
 
@@ -294,7 +338,35 @@ class Covariance:
             self._z_mean, self._zq, self._zmin, self._zmax, lya_tracer, discrete_tracer
         )
 
-        if lya_tracer is not None :
+        if lya_tracer is not None and self._integrate_forest_pixels:
+            # double integral over quasar redshift and forest pixels in the bin;
+            # the weights have shape (n_zq, n_lambda, n_mag)
+            weights_corr = self._get_forest_weights_corr(corr_name, lya_tracer, discrete_tracer)
+            w_lya = self._weights.compute_weights_integrated(weights_corr)
+            self._w_lya = w_lya
+            assert np.all(w_lya >= 0), (
+                f'negative Lya pixel weights for {corr_name} (weights evaluated with '
+                f'{weights_corr}); the weighting signal must be a positive power spectrum')
+
+            int_1, int_2, int_3, z_eff = self._weights.compute_forest_integrals_integrated(w_lya)
+
+            if self._weights.has_forest_coverage:
+                assert int_1 > 0, f'zero forest integral N1 in a covered bin for {corr_name}'
+                # Pw2D in McDonald & Eisenstein (2007); N_n plays the role of I_n * L_q
+                self._aliasing_weights = int_2 / int_1**2
+                # PNeff in McDonald & Eisenstein (2007)
+                self._effective_noise_power = int_3 * self._pix_kms / int_1**2
+            else:
+                # no forest pixel in the bin (zero quadrature measure): the forest carries
+                # no information. As in the central mode for out-of-range pixels, use a
+                # very large but finite noise power instead of infinity, so that the Lya
+                # Fisher matrix is ~0 yet finite and invertible; the aliasing weight is
+                # set to zero because the weights vanish.
+                self._aliasing_weights = 0.0
+                self._effective_noise_power = NO_FOREST_NOISE_POWER
+            self.forest_zeff = z_eff
+
+        elif lya_tracer is not None :
             # These only matter for lya
             w_lya = self._weights.compute_weights(corr_name)
             self._w_lya = w_lya

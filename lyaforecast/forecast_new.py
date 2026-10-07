@@ -212,6 +212,10 @@ class NewForecast:
 
         self.reconstruction_factor = self.config['survey'].getfloat('reconstruction factor', 1.0)
 
+        # integrated forest-pixel mode: also report the effective redshift of the forest
+        self._integrate_forest_pixels = self.config['control'].getboolean(
+            'integrate forest pixels', fallback=False)
+
         self.num_correlations = len(self.correlations)
 
     @property
@@ -279,6 +283,13 @@ class NewForecast:
         sigma_ap['total'] = np.zeros(self._survey.num_z_bins)
         corr_coef['total'] = np.zeros(self._survey.num_z_bins)
 
+        # effective redshift of the forest pixels, for correlations involving a lya tracer
+        forest_zeff = {
+            corr: np.full(self._survey.num_z_bins, np.nan)
+            for corr, tracers in self.correlations.items()
+            if 'continuous' in (tracers[0].type, tracers[1].type)
+        }
+
         for iz, zc in enumerate(self._survey.z_bin_centres):
             fisher_input = {
                 'p3d_cache': {},
@@ -297,6 +308,8 @@ class NewForecast:
                 self._covariance[corr_name](*self._survey.z_bin_edges[:, iz])
                 # this uses Luminosity, density, noise model
                 self._covariance[corr_name].compute_eff_density_and_noise(corr_name)
+                if self._integrate_forest_pixels and corr_name in forest_zeff:
+                    forest_zeff[corr_name][iz] = self._covariance[corr_name].forest_zeff
 
                 fisher_input['p3d_cache'][corr_name] = np.array([
                     self._power_spec.compute_p3d_hmpc_smooth(
@@ -391,6 +404,9 @@ class NewForecast:
         data["sigma_at"] = sigma_at['total']
         data["sigma_ap"] = sigma_ap['total']
         data["corr_coef"] = corr_coef['total']
+
+        if self._integrate_forest_pixels:
+            data["forest_zeff"] = forest_zeff
 
         return data
 

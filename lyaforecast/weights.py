@@ -66,6 +66,23 @@ class Weights:
         self._lya_tracer = lya_tracer
         self._discrete_tracer = discrete_tracer
 
+        # optional behaviour (defaults reproduce the central-redshift treatment)
+        control = config['control']
+        # double integral over quasar redshift and forest pixels within the bin
+        self._integrate_forest_pixels = control.getboolean(
+            'integrate forest pixels', fallback=False)
+        self._num_zq_points = control.getint('num zq integration points', fallback=128)
+        self._num_lambda_points = control.getint('num forest wavelength points', fallback=64)
+        # include aliasing (P1D x P_w) as signal when computing the weights
+        # (McDonald & Eisenstein 2007); without it the updates tend to weights
+        # that omit the P1D variance limiting sparse forests
+        self._weights_include_aliasing = control.getboolean(
+            'weights include aliasing', fallback=True)
+
+        # grid and noise cube of the integrated mode, built on first use
+        self._forest_grid_ready = False
+        self._pixel_noise_var = None
+
         # get k values to evaluate p_w
         self._get_eval_mode()
 
@@ -154,7 +171,11 @@ class Weights:
         # 2D density of lines of sight (units of 1/deg^2)
         aliasing = int_2 / (int_1**2 * self._forest_length)
         # weights include aliasing as signal
-        signal_power = self._p3d_w
+        if self._weights_include_aliasing:
+            # p1d_w [km/s] x aliasing [deg^2] has the units of p3d_w [deg^2 km/s]
+            signal_power = self._p3d_w + self._p1d_w * aliasing
+        else:
+            signal_power = self._p3d_w
 
         weights = signal_power / (signal_power + noise_power)
 
@@ -389,3 +410,265 @@ class Weights:
         noise_power = pixel_var / neff
 
         return noise_power
+
+    # ------------------------------------------------------------------
+    # Integrated forest-pixel mode: double integral over the quasar
+    # redshift z_q and over the forest pixels lying inside the bin.
+    # ------------------------------------------------------------------
+
+    def _setup_forest_pixel_grid(self):
+        """Build the (z_q, forest pixel, magnitude) integration grid for the bin.
+
+        Works in u = ln(lambda_obs). The bin is [u1, u2] = ln[lambda_min, lambda_max]
+        and the forest is [a, b] = ln[lrmin, lrmax] in the rest frame. A quasar at
+        y = ln(1 + z_q) has its forest at u in [y + a, y + b], so it overlaps the bin
+        for y in [u1 - b, u2 - a], further limited to the quasar redshift range
+        [zq_min_forest, zq_max_forest] of the tracer.
+
+        The z_q integral is a midpoint rule with ``num zq integration points`` points
+        uniform in y = ln(1 + z_q), with dz_q = (1 + z_q) dy. For each z_q, the
+        pixels are ``num forest wavelength points`` midpoints uniform in u over the
+        exact overlap of the forest with the bin, so each pixel carries
+        dv = c * overlap / n_lambda (km/s) and pixels outside the bin are never used.
+
+        If the redshift ranges do not overlap (y_high <= y_low) there is no forest
+        coverage: ``_has_forest_coverage`` is False, all quadrature weights vanish,
+        and the integrals N1, N2, N3 are zero.
+
+        Side effects: sets ``_zq_grid`` (n_zq,), ``_delta_zq`` (n_zq,),
+        ``_log_lambda_pix``, ``_lambda_pix`` and ``_z_pix`` (n_zq, n_lambda),
+        ``_overlap_length_kms`` and ``_delta_v_kms`` (n_zq,), ``_dn_dzq_dm``
+        (n_zq, n_mag) in deg^-2 per unit z_q per magnitude, ``_bin_length_kms``,
+        and ``_integration_measure`` (n_zq, 1, n_mag) in deg^-2 (the quadrature weight
+        dn/dz_q dm * dz_q * dm * dv / L_bin).
+        """
+        assert self._lya_tracer is not None, "Lya tracer must be set for forest integration"
+        assert self._num_zq_points >= 1 and self._num_lambda_points >= 1, \
+            "Number of integration points must be positive"
+
+        speed_light = self._cosmo.SPEED_LIGHT
+        num_zq = self._num_zq_points
+        num_lambda = self._num_lambda_points
+
+        # bin edges and rest-frame forest edges in u = ln(lambda)
+        log_lambda_min = np.log(self._cosmo.LYA_REST * (1 + self._zmin))
+        log_lambda_max = np.log(self._cosmo.LYA_REST * (1 + self._zmax))
+        log_rest_min = np.log(self._lya_tracer.lrmin)
+        log_rest_max = np.log(self._lya_tracer.lrmax)
+        self._bin_length_kms = speed_light * (log_lambda_max - log_lambda_min)
+
+        # range of y = ln(1+z_q) for which the forest overlaps the bin
+        log_1pzq_low = max(
+            log_lambda_min - log_rest_max, np.log(1 + self._lya_tracer.zq_min_forest))
+        log_1pzq_high = min(
+            log_lambda_max - log_rest_min, np.log(1 + self._lya_tracer.zq_max_forest))
+        self._has_forest_coverage = bool(log_1pzq_high > log_1pzq_low)
+
+        # midpoint rule in y = ln(1+z_q); dz_q = (1+z_q) dy
+        if self._has_forest_coverage:
+            delta_log_1pzq = (log_1pzq_high - log_1pzq_low) / num_zq
+        else:
+            delta_log_1pzq = 0.0
+        log_1pzq_grid = log_1pzq_low + (np.arange(num_zq) + 0.5) * delta_log_1pzq
+        self._zq_grid = np.exp(log_1pzq_grid) - 1
+        self._delta_zq = (1 + self._zq_grid) * delta_log_1pzq
+
+        # part of each forest inside the bin, in u = ln(lambda); the forest of
+        # a quasar at y spans [y + a, y + b]
+        overlap_low = np.maximum(log_lambda_min, log_1pzq_grid + log_rest_min)
+        overlap_high = np.minimum(log_lambda_max, log_1pzq_grid + log_rest_max)
+        overlap_length = np.maximum(overlap_high - overlap_low, 0.0)
+        self._overlap_length_kms = speed_light * overlap_length
+        self._delta_v_kms = self._overlap_length_kms / num_lambda
+
+        # pixel centres: midpoints uniform in u within the overlap, (n_zq, n_lambda)
+        pixel_fraction = (np.arange(num_lambda) + 0.5) / num_lambda
+        self._log_lambda_pix = (
+            overlap_low[:, np.newaxis] + overlap_length[:, np.newaxis] * pixel_fraction
+        )
+        self._lambda_pix = np.exp(self._log_lambda_pix)
+        self._z_pix = self._lambda_pix / self._cosmo.LYA_REST - 1
+
+        # quasar density per unit z_q and magnitude on the (n_zq, n_mag) grid;
+        # get_dn_dzdm masks with boolean arrays that need identical shapes
+        zq_2d, mag_2d = np.meshgrid(self._zq_grid, self.maglist, indexing='ij')
+        self._dn_dzq_dm = self._lya_tracer.get_dn_dzdm(zq_2d, mag_2d)
+
+        # quadrature weight of each (z_q, m) pair and pixel, normalised by the bin
+        # length so that the integrals N_n play the role of I_n * L_q (deg^-2)
+        delta_mag = self.maglist[1] - self.maglist[0]
+        self._integration_measure = (
+            self._dn_dzq_dm
+            * self._delta_zq[:, np.newaxis] * delta_mag
+            * self._delta_v_kms[:, np.newaxis]
+            / self._bin_length_kms
+        )[:, np.newaxis, :]
+
+        self._forest_grid_ready = True
+
+    @property
+    def has_forest_coverage(self):
+        """bool: whether some allowed z_q has forest pixels inside the bin.
+
+        False if the quasar redshift range of the sample does not overlap the bin, in
+        which case the quadrature measure of the integrated mode vanishes identically.
+        The integration grid is built on first access.
+        """
+        if not self._forest_grid_ready:
+            self._setup_forest_pixel_grid()
+
+        return self._has_forest_coverage
+
+    def _get_pixel_noise_var_grid(self):
+        """Return the pixel noise variance on the (z_q, pixel, magnitude) grid.
+
+        The pixel width in Angstroms follows the pixel wavelength,
+        pix_ang(lambda) = pix_kms * lambda / c, so that every pixel has the same
+        velocity width. The result is computed once and cached.
+
+        Returns
+        -------
+        ndarray
+            Dimensionless noise variance sigma_N^2(m, z_q, lambda) of shape
+            (n_zq, n_lambda, n_mag).
+        """
+        if self._pixel_noise_var is None:
+            if not self._forest_grid_ready:
+                self._setup_forest_pixel_grid()
+
+            # pixel width in Angstroms for each pixel, (n_zq, n_lambda, 1)
+            pix_ang = self._pix_kms * self._lambda_pix / self._cosmo.SPEED_LIGHT
+
+            noise_rms = self._spectrograph.get_pixel_rms_noise_array(
+                self.maglist[np.newaxis, np.newaxis, :],
+                self._zq_grid[:, np.newaxis, np.newaxis],
+                self._lambda_pix[:, :, np.newaxis],
+                pix_ang[:, :, np.newaxis],
+                self._lya_tracer.num_exp
+            )
+            self._pixel_noise_var = noise_rms**2
+
+        return self._pixel_noise_var
+
+    def compute_weights_integrated(self, corr):
+        """Compute optimal Lya weights w(z_q, lambda, m) for the integrated forest mode.
+
+        Same iteration as :meth:`compute_weights`, but the weights depend on the
+        quasar redshift, the pixel wavelength and the magnitude, so the pixel noise
+        variance uses the S/N at (m, z_q, lambda_pix). The initial weights use only
+        P1D and the pixel variance; three iterations of w = P_S / (P_S + P_N) follow.
+
+        Parameters
+        ----------
+        corr : str
+            Correlation name used to evaluate the 3D and 1D power spectra.
+
+        Returns
+        -------
+        ndarray
+            Weights of shape (n_zq, n_lambda, n_mag); all zero if the bin has no
+            forest coverage.
+        """
+        if not self._forest_grid_ready:
+            self._setup_forest_pixel_grid()
+
+        # pre-compute power spectra for weighting, as in the central mode
+        self._p3d_w = self._powerspec.compute_p3d_kms_smooth(
+            self._z_bin, self.kt_w_deg, self.kp_w_kms, self._res_kms, self._pix_kms, corr)
+
+        self._p1d_w = self._powerspec.compute_p1d_kms(
+            self._z_bin, self.kp_w_kms, self._res_kms, self._pix_kms, corr)
+
+        pixel_noise_var = self._get_pixel_noise_var_grid()
+
+        if not self._has_forest_coverage:
+            return np.zeros_like(pixel_noise_var)
+
+        # initial weights from P1D and the pixel noise variance only
+        pix_var_1d = self._p1d_w / self._pix_kms
+        weights = pix_var_1d / (pix_var_1d + pixel_noise_var)
+
+        num_iter = 3
+        for i in range(num_iter):
+            weights = self._compute_weights_lya_integrated(weights)
+
+        return weights
+
+    def _compute_weights_lya_integrated(self, weights):
+        """Update the integrated-mode weights with P3D (plus optional aliasing) as signal.
+
+        The noise power of a pixel is P_N = sigma_N^2 * pix_kms / N1. If
+        ``weights include aliasing`` is set, the signal is
+        P_S = P3D_w + P1D_w * N2 / N1^2 (McDonald & Eisenstein 2007, Eq. 19),
+        with N1 and N2 from the current weights.
+
+        Parameters
+        ----------
+        weights : ndarray
+            Current weights of shape (n_zq, n_lambda, n_mag).
+
+        Returns
+        -------
+        ndarray
+            Updated weights of shape (n_zq, n_lambda, n_mag).
+        """
+        int_1, int_2, _, _ = self.compute_forest_integrals_integrated(weights)
+
+        # noise power per pixel, (n_zq, n_lambda, n_mag), deg^2 km/s
+        noise_power = self._get_pixel_noise_var_grid() * self._pix_kms / int_1
+
+        if self._weights_include_aliasing:
+            aliasing = int_2 / int_1**2
+            signal_power = self._p3d_w + self._p1d_w * aliasing
+        else:
+            signal_power = self._p3d_w
+
+        return signal_power / (signal_power + noise_power)
+
+    def compute_forest_integrals_integrated(self, weights):
+        """Compute the integrals N1, N2, N3 and the effective redshift in integrated mode.
+
+        N_n = (1 / L_bin) sum_{z_q, lambda, m} dn/dz_q dm dz_q dm dv w^n
+        (times sigma_N^2 for n = 3), in deg^-2 (n = 1, 2) and deg^-2 times noise
+        variance (n = 3), with L_bin = c ln(lambda_max / lambda_min). They play the
+        role of I_n * L_q of the central mode, so that the aliasing weight is
+        N2 / N1^2 and the effective noise power is N3 * pix_kms / N1^2. The
+        effective redshift is the N1-integrand-weighted mean of
+        z_pix = lambda_pix / lambda_Lya - 1.
+
+        Parameters
+        ----------
+        weights : ndarray
+            Weights of shape (n_zq, n_lambda, n_mag).
+
+        Returns
+        -------
+        int_1 : float
+            N1 in deg^-2.
+        int_2 : float
+            N2 in deg^-2.
+        int_3 : float
+            N3 in deg^-2 (noise variance units).
+        z_eff : float
+            Effective redshift of the bin; NaN if N1 = 0 (no forest coverage).
+        """
+        if not self._forest_grid_ready:
+            self._setup_forest_pixel_grid()
+
+        pixel_noise_var = self._get_pixel_noise_var_grid()
+
+        integrand_1 = self._integration_measure * weights
+        integrand_2 = integrand_1 * weights
+        integrand_3 = integrand_2 * pixel_noise_var
+
+        int_1 = np.sum(integrand_1)
+        int_2 = np.sum(integrand_2)
+        int_3 = np.sum(integrand_3)
+
+        # effective redshift of the pixels contributing to N1
+        if int_1 > 0:
+            z_eff = np.sum(self._z_pix[:, :, np.newaxis] * integrand_1) / int_1
+        else:
+            z_eff = np.nan
+
+        return int_1, int_2, int_3, z_eff

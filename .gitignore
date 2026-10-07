@@ -8,6 +8,7 @@ build/
 tests/*
 tests/
 CLAUDE.md
+AGENTS.md
 .claude/
 .validation/
 .ruff_cache/
