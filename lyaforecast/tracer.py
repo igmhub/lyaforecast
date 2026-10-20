@@ -6,6 +6,10 @@ from scipy.ndimage import gaussian_filter1d
 
 TRACER_OPTIONS = ['qso', 'elgqso', 'lbg', 'lae']
 CONTINUOUS_TRACERS = ['lya']
+# lowest background-quasar redshift of the Lya forest sample: used to normalise
+# the dn/dzdm table to the target density, and as the default lower z_q limit
+# of the integrated forest-pixel mode.
+ZQ_MIN_FOREST_DEFAULT = 2.15
 
 
 class Tracer:
@@ -26,6 +30,12 @@ class Tracer:
 
         # tracer density
         self.tracer_density = self.config.getfloat('target density')
+        # lower redshift cut, applied to the dn/dzdm table bin centres, of the sample whose
+        # total density is 'target density' (Lya background sources and discrete QSOs only;
+        # other discrete tracers are normalised over the full table). The default keeps the
+        # historical value; e.g. 2.1 matches a QSO density defined for z > 2.1.
+        self.min_z_density_norm = self.config.getfloat(
+            'min_z_density_norm', ZQ_MIN_FOREST_DEFAULT)
 
         # tracer magnitude range
         self.mag_min = self.config.getfloat('min_band_mag', None)
@@ -126,7 +136,15 @@ class Tracer:
         self.pix_kms = self.config.getfloat('pix_width_kms', None)
         self.pix_ang = self.config.getfloat('pix_width_ang', None)
 
+        # quasar redshift limits of the forest sample; only used when integrating
+        # over quasar redshift and forest pixels (``integrate forest pixels``)
+        self.zq_min_forest = self.config.getfloat('min_zq_forest', ZQ_MIN_FOREST_DEFAULT)
+        zq_max_forest = self.config.getfloat('max_zq_forest', None)
+
         self._tracer_dndz = self._setup_dndzdm_lya(tracer_dzdz_file)
+
+        # default upper limit is the upper edge of the dn/dz table
+        self.zq_max_forest = self._zmax if zq_max_forest is None else zq_max_forest
 
     def _setup_dndzdm_lya(self, file):
         """Build a bivariate spline interpolator for Lya background-source dn/dzdm.
@@ -153,7 +171,7 @@ class Tracer:
 
         # scale density of quasars to desired number. By default given staright from QLF
         if self.tracer_density is not None:
-            z_min_lya = 2.15
+            z_min_lya = self.min_z_density_norm
             current_total_density = np.sum(tdNdmdzddeg2*(z_arr > z_min_lya))
             print(
                 f"Scaling lya dndzdm from a total density (z>={z_min_lya}) of "
@@ -206,7 +224,8 @@ class Tracer:
         if self.tracer_density is not None:
             # re-scale based on lya qso requirements
             if self.simple_name == 'qso':
-                current_total_density = np.sum(tdNdmdzddeg2.reshape(z.size, m.size)[z > 2.15])
+                current_total_density = np.sum(
+                    tdNdmdzddeg2.reshape(z.size, m.size)[z > self.min_z_density_norm])
             else:
                 current_total_density = np.sum(tdNdmdzddeg2.reshape(z.size, m.size))
             print(

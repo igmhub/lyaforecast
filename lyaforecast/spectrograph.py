@@ -266,7 +266,9 @@ class Spectrograph:
         trmag = np.fmax(rmag, self._magnitudes[0])
 
         # DESI file returns S/N per Angstrom, per file_num_exp exposures
-        snr_per_ang = self._snr_interp([trmag, zq, lam_obs])
+        # RegularGridInterpolator returns shape (1,); take the scalar (NumPy >= 2.4
+        # refuses to assign a size-1 array to a scalar slot)
+        snr_per_ang = self._snr_interp([trmag, zq, lam_obs])[0]
         # scale with pixel width
         snr_per_exp = snr_per_ang * np.sqrt(pix_width)
         # scale with number of exposures
@@ -275,6 +277,68 @@ class Spectrograph:
         snr = np.fmax(snr, 1 / large_noise)
 
         return 1 / snr
+
+    def get_pixel_rms_noise_array(self, rmag, zq, lam_obs, pix_width, num_exp=4):
+        """Vectorised version of :meth:`get_pixel_rms_noise`.
+
+        Applies the same rules as the scalar method on broadcast arrays: points
+        fainter than the faintest tabulated magnitude, with quasar redshift
+        outside the tabulated range, or with observed wavelength outside the
+        tabulated range receive a large noise; brighter magnitudes are clipped
+        to the brightest tabulated one. Nothing is printed.
+
+        Parameters
+        ----------
+        rmag : float or array_like
+            Apparent magnitude of the quasar.
+        zq : float or array_like
+            Quasar redshift.
+        lam_obs : float or array_like
+            Observed wavelength of the pixel in Angstroms.
+        pix_width : float or array_like
+            Pixel width in Angstroms.
+        num_exp : int, optional
+            Number of exposures.
+
+        Returns
+        -------
+        ndarray
+            Noise RMS (= 1 / S/N) with the shape obtained by broadcasting
+            ``rmag``, ``zq``, ``lam_obs`` and ``pix_width`` against each other;
+            1e10 where out of range.
+        """
+        large_noise = 1e10
+
+        rmag, zq, lam_obs, pix_width = np.broadcast_arrays(
+            np.asarray(rmag, dtype=float), np.asarray(zq, dtype=float),
+            np.asarray(lam_obs, dtype=float), np.asarray(pix_width, dtype=float)
+        )
+        output_shape = rmag.shape
+
+        # points for which the scalar method would return the large noise
+        out_of_range_mask = (
+            (rmag > self._magnitudes[-1])
+            | (zq > self._zq[-1]) | (zq < self._zq[0])
+            | (lam_obs > self._lambda_obs_m[-1]) | (lam_obs < self._lambda_obs_m[0])
+        )
+
+        # if brighter than minimum magnitude, use minimum
+        clipped_rmag = np.fmax(rmag, self._magnitudes[0])
+
+        # DESI file returns S/N per Angstrom, per file_num_exp exposures;
+        # all points are queried (extrapolated ones are overwritten below)
+        points = np.stack(
+            [clipped_rmag.ravel(), zq.ravel(), lam_obs.ravel()], axis=-1)
+        snr_per_ang = self._snr_interp(points).reshape(output_shape)
+
+        # scale with pixel width and number of exposures
+        snr = snr_per_ang * np.sqrt(pix_width) * np.sqrt(num_exp / self._file_num_exp)
+        # prevent division by zero
+        snr = np.fmax(snr, 1 / large_noise)
+
+        noise_rms = np.where(out_of_range_mask, large_noise, 1 / snr)
+
+        return noise_rms
 
     def smooth_kernel_kms(self, pix_kms, res_kms, k_kms):
         """Convolution kernel in Fourier space for pixelisation and resolution.
